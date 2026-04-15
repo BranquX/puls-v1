@@ -17,9 +17,14 @@ function isPublicRoute(segment: string | undefined) {
 }
 
 export default function RootLayout() {
+  const [mounted, setMounted] = useState(false);
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const segments = useSegments();
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -51,6 +56,8 @@ export default function RootLayout() {
       router.replace("/");
     }
   }, [session, segments, router]);
+
+  if (!mounted) return null;
 
   return (
     <ThemeProvider>
