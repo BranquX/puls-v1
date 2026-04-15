@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "adchat",
-    "slug": "adchat",
+    "name": "puls",
+    "slug": "puls",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "adchat",
+    "scheme": "puls",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

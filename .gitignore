@@ -26,12 +26,17 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# editor swap files
+*.swp
+
 # macOS
 .DS_Store
 *.pem
 
 # local env files
 .env*.local
+.env
+.env.*
 
 # typescript
 *.tsbuildinfo
@@ -41,3 +46,4 @@ app-example
 # generated native folders
 /ios
 /android
+certs/

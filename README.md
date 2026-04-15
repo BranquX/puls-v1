@@ -1,50 +1,107 @@
-# Welcome to your Expo app 👋
+# Puls. — AI-Powered Ad Management for Israeli SMBs
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Puls. is a digital advertising management platform for small-medium businesses in Israel. It features an AI chat in Hebrew with specialized agents, Meta Ads integration, media library, and automated analytics.
 
-## Get started
+## Architecture
 
-1. Install dependencies
+- **Client**: Expo + expo-router (React Native) — file-based routing in `app/`
+- **Server**: Express (`server.js`) — API endpoints, AI agents, Meta integration
+- **Database**: Supabase (Postgres + Auth + RLS)
+- **AI**: Anthropic Claude (agents), Google Gemini (image generation)
+- **Email**: Resend (alerts, weekly reports)
 
-   ```bash
-   npm install
-   ```
+## Quick Start
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. Install dependencies
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Configure environment
 
-## Learn more
+```bash
+cp .env.example .env
+# Fill in all values in .env
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Required variables: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `META_APP_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 3. Set up database
 
-## Join the community
+Run the SQL files in `supabase/` against your Supabase project:
+- `supabase/schema.sql` — base tables
+- `supabase/rls-production.sql` — Row Level Security policies
+- `supabase/proactive-messages.sql` — weekly reports table
+- `supabase/meta-token-expires.sql` — token expiry tracking
 
-Join our community of developers creating universal apps.
+### 4. Start development
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+# Terminal 1: Backend server (port 3001)
+npm run server
+
+# Terminal 2: Expo app (web on port 8081)
+npm run web
+```
+
+Both processes must be running. The app connects to the server via `EXPO_PUBLIC_API_URL`.
+
+## Development Commands
+
+```bash
+npm run start      # Expo dev server
+npm run server     # Express API server
+npm run web        # Expo web
+npm run ios        # iOS simulator
+npm run android    # Android emulator
+npm run lint       # ESLint
+```
+
+## AI Agents
+
+| Agent | Name | Role |
+|-------|------|------|
+| dana  | Dana | Client manager, orchestrator |
+| yoni  | Yoni | Ad copywriting |
+| ron   | Ron  | PPC analytics |
+| maya  | Maya | Graphics (Gemini image gen) |
+| noa   | Noa  | Content strategy |
+
+## Production Deployment
+
+### Server (Railway/Render)
+
+Set all env vars from `.env.example`. The server uses `PORT` from env (defaults to 3001).
+
+Key production settings:
+- `APP_WEB_ORIGIN` — your frontend domain (NOT localhost)
+- `META_REDIRECT_URI` — your server's OAuth callback URL
+- `SUPABASE_SERVICE_ROLE_KEY` — bypasses RLS for server operations
+- `CRON_SECRET` — authenticates cron job webhooks
+
+### Client (Vercel/Netlify)
+
+```bash
+npx expo export --platform web
+```
+
+Set `EXPO_PUBLIC_API_URL` to your server's URL.
+
+### Security Checklist
+
+- [ ] Enable RLS: run `supabase/rls-production.sql`
+- [ ] Rotate any exposed API keys
+- [ ] Set `NODE_ENV=production`
+- [ ] Verify `APP_WEB_ORIGIN` is not localhost
+- [ ] Set `CRON_SECRET` to a strong random string
+- [ ] Configure Resend domain for email delivery
+
+## Rate Limits
+
+- General API: 100 requests / 15 minutes
+- Chat & Agent: 20 requests / minute
+
+## License
+
+Proprietary. All rights reserved.
