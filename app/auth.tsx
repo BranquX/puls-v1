@@ -40,9 +40,12 @@ type PendingAction = "login" | "register" | "forgot" | null;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const SITE_URL =
+  process.env.EXPO_PUBLIC_SITE_URL ?? "https://puls-v1-jhs6.vercel.app";
+
 const RESET_REDIRECT_TO =
   process.env.EXPO_PUBLIC_RESET_REDIRECT_URL ??
-  "http://localhost:8082/reset-password";
+  `${SITE_URL}/reset-password`;
 
 function mapLoginError(error: AuthError): { field: FieldKey; message: string } {
   const raw = (error.message || "").trim();
@@ -463,6 +466,7 @@ export default function AuthScreen() {
       const { data, error } = await supabase.auth.signUp({
         email: em,
         password: pw,
+        options: { emailRedirectTo: SITE_URL },
       });
 
       if (error) {
