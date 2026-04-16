@@ -434,8 +434,8 @@ const ANTHROPIC_API_KEY = requireEnv("ANTHROPIC_API_KEY");
 const GEMINI_API_KEY = requireEnv("GEMINI_API_KEY");
 const META_APP_SECRET = requireEnv("META_APP_SECRET");
 
-const META_APP_ID = process.env.META_APP_ID || "950143061210639";
-const META_CONFIG_ID = process.env.META_CONFIG_ID || "800335946473510";
+const META_APP_ID = requireEnv("META_APP_ID");
+const META_CONFIG_ID = process.env.META_CONFIG_ID || "";
 const META_REDIRECT_URI =
   process.env.META_REDIRECT_URI || "https://localhost:3002/auth/meta/callback";
 const APP_WEB_ORIGIN = process.env.APP_WEB_ORIGIN || "http://localhost:8081";
@@ -3352,7 +3352,7 @@ const corsOptions = {
 };
 
 /** דרישת Authorization: Bearer (JWT) — אימות מלא מול Supabase בשלב הבא. */
-function requireBearerAuthorization(req, res, next) {
+async function requireBearerAuthorization(req, res, next) {
   const raw = req.headers.authorization;
   if (
     typeof raw !== "string" ||
@@ -3363,6 +3363,15 @@ function requireBearerAuthorization(req, res, next) {
   const token = raw.slice(7).trim();
   if (!token) {
     return res.status(401).json({ error: "חסר JWT ב־Authorization" });
+  }
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: "טוקן לא תקין או פג תוקף" });
+    }
+    req.user = user;
+  } catch {
+    return res.status(401).json({ error: "אימות נכשל" });
   }
   next();
 }
@@ -5801,7 +5810,7 @@ ${script || ""}
     const tokenJson = await tokenRes.json().catch(() => ({}));
 
     if (!tokenRes.ok || !tokenJson.access_token) {
-      console.log("[auth/meta/callback] token exchange failed:", JSON.stringify(tokenJson).slice(0, 500));
+      console.log("[auth/meta/callback] token exchange failed:", tokenJson.error?.message || "unknown error");
       return cbHtml("החלפת קוד נכשלה", JSON.stringify(tokenJson).slice(0, 500), "");
     }
 
@@ -5825,7 +5834,7 @@ ${script || ""}
         }
         console.log("[auth/meta/callback] exchanged for long-lived token, expires_in:", expiresIn);
       } else {
-        console.log("[auth/meta/callback] long-lived token exchange failed, using short-lived:", JSON.stringify(llJson).slice(0, 300));
+        console.log("[auth/meta/callback] long-lived token exchange failed, using short-lived");
       }
     } catch (e) {
       console.log("[auth/meta/callback] long-lived token exchange error:", e instanceof Error ? e.message : String(e));
@@ -5833,8 +5842,8 @@ ${script || ""}
 
     console.log("=== META ASSETS DEBUG ===");
     console.log(
-      "access_token (first 20):",
-      accessToken != null ? String(accessToken).substring(0, 20) : accessToken,
+      "access_token received, length:",
+      accessToken != null ? String(accessToken).length : 0,
     );
 
     const meRes = await fetch(
