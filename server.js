@@ -1637,20 +1637,24 @@ const AGENT_PROMPTS = {
 
   maya: `את מאיה — קריאייטיב דירקטור AI של Puls.
 
-לפני כל יצירת תמונה חובה לקרוא מהזיכרון:
+חובה: כשמבקשים ממך תמונה — אל תגידי "בדרך" או "עוד שניות" או "ממתינה" או "מכינה".
+תחזירי את JSON הפעולה מיד בתשובה הראשונה שלך.
+אין לשלוח הודעת המתנה ואז הודעה נוספת — הכל בתשובה אחת.
+
+לפני כל יצירת תמונה קראי מהזיכרון:
 - brand_colors, brand_style_preference, brand_fonts, brand_avoid
 - approved_styles — גרפיקות שהלקוח אישר (חקי את הסגנון!)
 
 כללי זהב:
-1. תמיד צבעי המותג המדויקים — אל תמציאי צבעים
-2. עקביות סגנון בין כל הגרפיקות של אותו לקוח
+1. צבעי המותג המדויקים — אל תמציאי צבעים
+2. עקביות סגנון בין כל הגרפיקות
 3. תבניות מאושרות = בסיס לגרפיקות חדשות
 4. תמיד 1080x1080 לפייסבוק
 5. לוגו בפינה בצורה עדינה (אם קיים)
-6. פרומפט ל-Gemini תמיד באנגלית ומפורט (layout, style, lighting, typography)
+6. פרומפט ל-Gemini באנגלית ומפורט (layout, style, lighting, typography)
 7. אל תשאלי שאלות — צרי מיד
 
-JSON format תמיד:
+התשובה שלך חייבת להיות JSON בלבד, שורה אחת:
 {"action":"generate_image","prompt":"detailed english prompt...","aspect_ratio":"1:1","context":"facebook_ad"}`,
 
   noa: `את נועה — אסטרטגיסטית תוכן.
@@ -2063,14 +2067,32 @@ async function generateImageWithGeminiInternal({
       imageConfig: { aspectRatio: aspect_ratio || "1:1", imageSize: "1K" },
     },
   };
-  const upstream = await fetch(GEMINI_GENERATE_IMAGE_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-goog-api-key": key,
-    },
-    body: JSON.stringify(body),
-  });
+  const GEMINI_TIMEOUT_MS = 30_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  let upstream;
+  try {
+    upstream = await fetch(GEMINI_GENERATE_IMAGE_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": key,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    const isAbort = e instanceof Error && e.name === "AbortError";
+    console.warn("[gemini] fetch failed:", isAbort ? "timeout" : (e instanceof Error ? e.message : String(e)));
+    return {
+      ok: false,
+      error: isAbort
+        ? "מאיה נתקעה — יצירת התמונה ארכה יותר מ-30 שניות. נסה שוב."
+        : `Gemini fetch error: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+  clearTimeout(timer);
   const rawText = await upstream.text();
   if (!upstream.ok) {
     return {
@@ -2295,7 +2317,42 @@ async function enrichResultWithGenerateImage(result, businessId, ctx = {}) {
     }
   }
 
-  const extracted = extractGenerateImagePayload(working.text);
+  let extracted = extractGenerateImagePayload(working.text);
+
+  // Loop detection: Maya promised an image but didn't produce JSON
+  if (
+    !extracted &&
+    (working.delegated_to === "maya" || working.agent === "maya")
+  ) {
+    const lower = String(working.text).toLowerCase();
+    const DELAY_PATTERNS = [
+      "בדרך", "עוד שניות", "ממתין", "מסיימת", "מכינה", "רגע אחד",
+      "עובדת על", "מעבדת", "יוצרת", "מייצרת", "ברגעים", "תכף",
+    ];
+    const hasDelayPattern = DELAY_PATTERNS.some((p) => lower.includes(p));
+    const looksLikeImageReq = looksLikeVisualImageRequest(
+      lastUserMessageText(ctx.messages),
+    );
+    if (hasDelayPattern || looksLikeImageReq) {
+      console.warn("[maya-loop] delay pattern detected, forcing generation");
+      const forceJson = await repairMayaJsonToGenerateImage({
+        fullText:
+          "Maya promised an image but returned no JSON. User asked for a graphic. Generate the JSON now.",
+        messages: ctx.messages,
+        businessId,
+        clientMemoryPayload: ctx.client_memory,
+        excerptMode: "maya_section",
+      });
+      if (forceJson) {
+        working = {
+          ...working,
+          text: forceJson,
+        };
+        extracted = extractGenerateImagePayload(working.text);
+      }
+    }
+  }
+
   if (!extracted) return working;
 
   let finalPrompt = extracted.prompt;

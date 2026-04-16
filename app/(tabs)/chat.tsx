@@ -1363,6 +1363,28 @@ function ChatBubble({
   const [imageOpen, setImageOpen] = useState(false);
   const imgScale = useRef(new Animated.Value(1)).current;
 
+  const imgEntryOpacity = useRef(new Animated.Value(hasImage ? 0 : 1)).current;
+  const imgEntryScale = useRef(new Animated.Value(hasImage ? 0.95 : 1)).current;
+  const [showReadyBadge, setShowReadyBadge] = useState(false);
+  const readyOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!hasImage) return;
+    Animated.parallel([
+      Animated.timing(imgEntryOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(imgEntryScale, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 4 }),
+    ]).start(() => {
+      setShowReadyBadge(true);
+      Animated.timing(readyOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start(() => {
+        setTimeout(() => {
+          Animated.timing(readyOpacity, { toValue: 0, duration: 600, useNativeDriver: true }).start(() => {
+            setShowReadyBadge(false);
+          });
+        }, 2000);
+      });
+    });
+  }, [hasImage, imgEntryOpacity, imgEntryScale, readyOpacity]);
+
   const timeText = formatTime(createdAt);
   return (
     <View
@@ -1400,37 +1422,44 @@ function ChatBubble({
                   ) : null}
                   {dataUri && hasImage ? (
                     <>
-                      <Pressable
-                        onPress={() => setImageOpen(true)}
-                        onPressIn={() => {
-                          Animated.spring(imgScale, {
-                            toValue: 0.98,
-                            useNativeDriver: true,
-                            speed: 30,
-                            bounciness: 0,
-                          }).start();
-                        }}
-                        onPressOut={() => {
-                          Animated.spring(imgScale, {
-                            toValue: 1,
-                            useNativeDriver: true,
-                            speed: 30,
-                            bounciness: 0,
-                          }).start();
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel="פתח תמונה"
-                        style={{ marginTop: 8 }}
-                      >
-                        <Animated.View style={{ transform: [{ scale: imgScale }] }}>
-                          <Image
-                            source={{ uri: dataUri }}
-                            style={{ width: 240, height: 240, borderRadius: 12, marginTop: 8 }}
-                            resizeMode="cover"
-                            accessibilityLabel="תמונה מהסוכן"
-                          />
-                        </Animated.View>
-                      </Pressable>
+                      <Animated.View style={{ opacity: imgEntryOpacity, transform: [{ scale: imgEntryScale }] }}>
+                        <Pressable
+                          onPress={() => setImageOpen(true)}
+                          onPressIn={() => {
+                            Animated.spring(imgScale, {
+                              toValue: 0.98,
+                              useNativeDriver: true,
+                              speed: 30,
+                              bounciness: 0,
+                            }).start();
+                          }}
+                          onPressOut={() => {
+                            Animated.spring(imgScale, {
+                              toValue: 1,
+                              useNativeDriver: true,
+                              speed: 30,
+                              bounciness: 0,
+                            }).start();
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="פתח תמונה"
+                          style={{ marginTop: 8 }}
+                        >
+                          <Animated.View style={{ transform: [{ scale: imgScale }] }}>
+                            <Image
+                              source={{ uri: dataUri }}
+                              style={{ width: 240, height: 240, borderRadius: 12, marginTop: 8 }}
+                              resizeMode="cover"
+                              accessibilityLabel="תמונה מהסוכן"
+                            />
+                          </Animated.View>
+                        </Pressable>
+                        {showReadyBadge ? (
+                          <Animated.View style={[styles.readyBadge, { opacity: readyOpacity }]}>
+                            <Text style={styles.readyBadgeText}>מוכן!</Text>
+                          </Animated.View>
+                        ) : null}
+                      </Animated.View>
 
                       <Modal
                         visible={imageOpen}
@@ -2467,6 +2496,20 @@ const styles = StyleSheet.create({
     maxWidth: 720,
     borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  readyBadge: {
+    position: "absolute",
+    top: 16,
+    right: 8,
+    backgroundColor: "rgba(74, 222, 128, 0.9)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  readyBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
   imageModalBottom: {
     position: "absolute",
