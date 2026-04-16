@@ -270,10 +270,10 @@ function SpendChart({ series, themeColors }: { series: SpendDay[]; themeColors?:
 export default function Index() {
   const router = useRouter();
   const { business, loading } = useBusiness();
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
   const rawTabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
-  const { isDesktop, contentWidth, width: screenWidth } = useResponsiveLayout();
+  const { isDesktop } = useResponsiveLayout();
   const tabBarHeight = isDesktop ? 0 : rawTabBarHeight;
 
   const [metaLoading, setMetaLoading] = useState(true);
@@ -540,7 +540,6 @@ export default function Index() {
     ] as const;
   }, [metaCtx]);
 
-  const isLight = mode === "light";
   const themed = useMemo(() => ({
     card: { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
     text: { color: colors.text },
@@ -549,11 +548,6 @@ export default function Index() {
   }), [colors]);
 
   const danaDaily = reco[0] || null;
-
-  const unreadAlertCount = useMemo(
-    () => alerts.filter((a) => !a.read_at).length,
-    [alerts],
-  );
 
   if (loading || !business) {
     return (
@@ -866,7 +860,7 @@ export default function Index() {
               </View>
             ) : recentSessions.length === 0 ? (
               <View style={[styles.glassCard, themed.card, { padding: 20, alignItems: "center" }]}>
-                <Text style={[{ color: colors.textMuted, fontSize: 13, writingDirection: "rtl" }]}>עדיין אין שיחות. התחל שיחה חדשה בצ'אט!</Text>
+                <Text style={[{ color: colors.textMuted, fontSize: 13, writingDirection: "rtl" }]}>{"עדיין אין שיחות. התחל שיחה חדשה בצ'אט!"}</Text>
               </View>
             ) : (
               <View style={[styles.glassCard, themed.card, { overflow: "hidden" }]}>

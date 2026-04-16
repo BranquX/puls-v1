@@ -1651,11 +1651,6 @@ function TypingIndicator({ agentKey, colors }: { agentKey: AgentKey; colors: Ret
   );
 }
 
-function isLikelyMayaImageRequest(message: string): boolean {
-  // backward-compat: used in a few places; now based on intent router
-  return detectIntent(message) === "maya";
-}
-
 function SaveImageButton({
   image_base64,
   mime_type,

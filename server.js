@@ -446,7 +446,7 @@ console.log("  META_APP_ID:", META_APP_ID);
 console.log("  META_CONFIG_ID:", META_CONFIG_ID || "(not set — using scope-based flow)");
 console.log("  META_REDIRECT_URI:", META_REDIRECT_URI);
 console.log("  APP_WEB_ORIGIN:", APP_WEB_ORIGIN);
-console.log("  META_APP_SECRET:", META_APP_SECRET ? `${META_APP_SECRET.slice(0, 4)}…${META_APP_SECRET.slice(-4)}` : "(missing!)");
+console.log("  META_APP_SECRET:", META_APP_SECRET ? "(set)" : "(missing!)");
 if (META_REDIRECT_URI.includes("localhost")) {
   console.warn("⚠️  META_REDIRECT_URI contains 'localhost' — this won't work in production!");
   console.warn("   Set META_REDIRECT_URI=https://your-domain.com/auth/meta/callback in your env.");
@@ -4099,7 +4099,7 @@ app.patch(
   },
 );
 
-app.get("/api/client-memory", async (req, res) => {
+app.get("/api/client-memory", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   if (!businessId || !isUuid(String(businessId))) {
     return res
@@ -4132,7 +4132,7 @@ app.get("/api/client-memory", async (req, res) => {
   }
 });
 
-app.post("/api/client-memory", async (req, res) => {
+app.post("/api/client-memory", requireBearerAuthorization, async (req, res) => {
   const {
     business_id: bid,
     category,
@@ -4212,7 +4212,7 @@ app.post("/api/client-memory", async (req, res) => {
   }
 });
 
-app.get("/api/meta-context", async (req, res) => {
+app.get("/api/meta-context", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   if (!businessId || !isUuid(String(businessId))) {
     return res
@@ -4431,7 +4431,7 @@ function normalizeMetaAssetList(raw) {
   });
 }
 
-app.get("/api/meta-assets", async (req, res) => {
+app.get("/api/meta-assets", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   const type = String(req.query.type || "").trim();
   if (!businessId || !isUuid(String(businessId))) {
@@ -4461,7 +4461,7 @@ app.get("/api/meta-assets", async (req, res) => {
   }
 });
 
-app.patch("/api/meta-selected-assets", async (req, res) => {
+app.patch("/api/meta-selected-assets", requireBearerAuthorization, async (req, res) => {
   const {
     business_id: businessId,
     selected_ad_account_id,
@@ -4499,7 +4499,7 @@ app.patch("/api/meta-selected-assets", async (req, res) => {
   }
 });
 
-app.get("/api/alerts", async (req, res) => {
+app.get("/api/alerts", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   const limitRaw = parseInt(String(req.query.limit || "20"), 10);
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, limitRaw)) : 20;
@@ -4667,7 +4667,7 @@ async function runAlertsCheckForBusinesses(businessIds) {
  * Returns JSON array of insights, each with an action the user can execute.
  * Cached 1 hour per business.
  */
-app.post("/api/ron-insights", async (req, res) => {
+app.post("/api/ron-insights", requireBearerAuthorization, async (req, res) => {
   const businessId = req.body?.business_id;
   if (!businessId || !isUuid(String(businessId))) {
     return res.status(400).json({ error: "חסר business_id" });
@@ -4818,7 +4818,7 @@ ${metaBlock}
  * Returns { summary, score, recommendations[], fetched_at }.
  * Cached 1 hour per business + saved to client_memory.
  */
-app.post("/api/ron-analysis", async (req, res) => {
+app.post("/api/ron-analysis", requireBearerAuthorization, async (req, res) => {
   const businessId = req.body?.business_id;
   if (!businessId || !isUuid(String(businessId))) {
     return res.status(400).json({ error: "חסר business_id" });
@@ -4945,7 +4945,7 @@ ${metaBlock}
   }
 });
 
-app.get("/api/meta-campaigns", async (req, res) => {
+app.get("/api/meta-campaigns", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   if (!businessId || !isUuid(String(businessId))) {
     return res.status(400).json({ error: "חסר business_id" });
@@ -5193,7 +5193,7 @@ app.get("/api/meta-campaigns", async (req, res) => {
  * GET /api/meta-campaign/:campaignId/adsets?business_id=UUID
  * Returns ad sets (audiences) for a campaign. Cached 10 min.
  */
-app.get("/api/meta-campaign/:campaignId/adsets", async (req, res) => {
+app.get("/api/meta-campaign/:campaignId/adsets", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   if (!businessId || !isUuid(String(businessId))) return res.status(400).json({ error: "חסר business_id" });
   const cacheKey = `adsets:${req.params.campaignId}`;
@@ -5271,7 +5271,7 @@ app.get("/api/meta-campaign/:campaignId/adsets", async (req, res) => {
  * Returns ads with creative images. Cached 10 min.
  * Optimized: fetches images in parallel, skips slow preview iframe calls.
  */
-app.get("/api/meta-campaign/:campaignId/ads", async (req, res) => {
+app.get("/api/meta-campaign/:campaignId/ads", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   if (!businessId || !isUuid(String(businessId))) return res.status(400).json({ error: "חסר business_id" });
   const cacheKey = `ads:${req.params.campaignId}`;
@@ -5360,6 +5360,7 @@ app.get("/api/meta-campaign/:campaignId/ads", async (req, res) => {
 
 app.get(
   "/api/meta-campaign/:campaignId",
+  requireBearerAuthorization,
   async (req, res) => {
   const businessId = req.query.business_id;
   const rangeRaw = parseInt(String(req.query.range || "7"), 10);
@@ -5411,6 +5412,7 @@ app.get(
 
 app.post(
   "/api/meta-campaign/:campaignId/pause",
+  requireBearerAuthorization,
   async (req, res) => {
   const businessId = req.body?.business_id;
   if (!businessId || !isUuid(String(businessId))) {
@@ -5445,6 +5447,7 @@ app.post(
 
 app.post(
   "/api/meta-campaign/:campaignId/activate",
+  requireBearerAuthorization,
   async (req, res) => {
   const businessId = req.body?.business_id;
   if (!businessId || !isUuid(String(businessId))) {
@@ -5479,6 +5482,7 @@ app.post(
 
 app.post(
   "/api/meta-campaign/:campaignId/budget",
+  requireBearerAuthorization,
   async (req, res) => {
   const businessId = req.body?.business_id;
   const dailyIls = req.body?.daily_budget_ils;
@@ -5519,6 +5523,7 @@ app.post(
 
 app.post(
   "/api/meta-campaign/:campaignId/duplicate",
+  requireBearerAuthorization,
   async (req, res) => {
   const businessId = req.body?.business_id;
   if (!businessId || !isUuid(String(businessId))) {
@@ -5680,7 +5685,7 @@ app.post("/api/meta-execute-action", requireBearerAuthorization, async (req, res
  * GET /api/meta-targeting/interests?business_id=UUID&q=fitness
  * Search for interest targeting options.
  */
-app.get("/api/meta-targeting/interests", async (req, res) => {
+app.get("/api/meta-targeting/interests", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   const q = String(req.query.q || "").trim();
   if (!businessId || !isUuid(String(businessId))) return res.status(400).json({ error: "חסר business_id" });
@@ -5960,7 +5965,7 @@ ${script || ""}
   }
 });
 
-app.post("/api/generate-image", async (req, res) => {
+app.post("/api/generate-image", requireBearerAuthorization, async (req, res) => {
   try {
     const { prompt, aspect_ratio, business_id } = req.body || {};
     if (prompt == null || String(prompt).trim() === "") {
@@ -5989,7 +5994,7 @@ app.post("/api/generate-image", async (req, res) => {
   }
 });
 
-app.post("/api/agent", async (req, res) => {
+app.post("/api/agent", requireBearerAuthorization, async (req, res) => {
   try {
     const agentNorm = normalizeAgentKey(req.body?.agent);
     if (!agentNorm) {
@@ -6013,7 +6018,7 @@ app.post("/api/agent", async (req, res) => {
   }
 });
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", requireBearerAuthorization, async (req, res) => {
   try {
     const body = req.body || {};
     const agentNorm = normalizeAgentKey(body.agent) || "dana";

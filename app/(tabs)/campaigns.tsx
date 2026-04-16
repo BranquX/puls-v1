@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -104,10 +103,6 @@ function objectiveLabel(o: string | null): string {
     CONVERSIONS: "המרות", REACH: "חשיפה", LEAD_GENERATION: "לידים", MESSAGES: "הודעות",
   };
   return map[o] || o.replace(/^OUTCOME_/, "").replace(/_/g, " ").toLowerCase();
-}
-
-function datePresetLabel(p: DatePreset): string {
-  return DATE_PRESETS.find((d) => d.key === p)?.label || p;
 }
 
 export default function CampaignsScreen() {
