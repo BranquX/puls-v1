@@ -1632,8 +1632,12 @@ const AGENT_PROMPTS = {
    {"action":"generate_image","prompt":"...","aspect_ratio":"1:1"}
 2. הprompt תמיד באנגלית ומפורט (layout, style, lighting, typography if needed) ומותאם לקהל
 3. תמיד 1:1 (1080x1080) לפייסבוק
-4. השתמשי בלוגו, צבעי מותג וסגנון מהזיכרון (Client Memory + Brand Kit + website_content אם קיים)
-5. אל תשאלי שאלות — צרי מיד
+4. לפני כל יצירת תמונה, קראי את נתוני המותג מהזיכרון (Brand Kit + Client Memory + website_content)
+5. השתמשי תמיד בצבעי המותג הספציפיים של הלקוח — אל תמציאי צבעים
+6. אם יש לוגו — שלבי אותו בפינה בצורה עדינה
+7. הסגנון חייב להתאים לטון המותג (מקצועי/צעיר/חם וכו')
+8. שמרי עקביות בין כל הגרפיקות של אותו לקוח — בדקי approved_styles מהזיכרון
+9. אל תשאלי שאלות — צרי מיד
 החזרי JSON בלבד, בלי markdown, בלי טקסט נוסף.`,
 
   noa: `את נועה — אסטרטגיסטית תוכן.
@@ -2303,10 +2307,24 @@ async function enrichResultWithGenerateImage(result, businessId, ctx = {}) {
         // ignore
       }
 
-      // 2) אם אין בזיכרון — שלוף website מטבלת businesses ו-scrape
+      // 1.5) שלוף נתוני מותג/קהל מהזיכרון
+      let brandMemories = [];
+      try {
+        const { data: memRows } = await supabaseAdmin
+          .from("client_memory")
+          .select("category,key,value")
+          .eq("business_id", bid)
+          .in("category", ["brand", "audience", "business_profile"])
+          .neq("key", "website_content");
+        if (memRows) brandMemories = memRows;
+      } catch {
+        // ignore
+      }
+
+      // 2) שלוף מידע עסקי + מותג מטבלת businesses
       const { data: biz } = await supabaseAdmin
         .from("businesses")
-        .select("website,brand_logo")
+        .select("website,brand_logo,brand_colors,brand_font,brand_tone,brand_differentiator,description,name,industry,target_age_min,target_age_max,target_gender")
         .eq("id", bid)
         .maybeSingle();
       const businessWebsite =
@@ -2366,6 +2384,30 @@ async function enrichResultWithGenerateImage(result, businessId, ctx = {}) {
         finalPrompt = `${finalPrompt}${block}`.trim();
       }
 
+      // 3.5) brand identity context for Gemini
+      const brandParts = [];
+      if (biz?.name) brandParts.push(`Business: ${biz.name}`);
+      if (biz?.industry) brandParts.push(`Industry: ${biz.industry}`);
+      if (biz?.description) brandParts.push(`Description: ${biz.description}`);
+      if (biz?.brand_colors && typeof biz.brand_colors === "object" && Object.keys(biz.brand_colors).length) {
+        brandParts.push(`Brand colors (use EXACTLY): ${JSON.stringify(biz.brand_colors)}`);
+      }
+      if (Array.isArray(biz?.brand_tone) && biz.brand_tone.length) {
+        brandParts.push(`Brand tone: ${biz.brand_tone.join(", ")}`);
+      }
+      if (biz?.brand_font) brandParts.push(`Brand font: ${biz.brand_font}`);
+      if (biz?.brand_differentiator) brandParts.push(`Unique value proposition: ${biz.brand_differentiator}`);
+      if (biz?.target_age_min || biz?.target_age_max || biz?.target_gender) {
+        brandParts.push(`Target audience: ages ${biz.target_age_min || 18}-${biz.target_age_max || 65}, ${biz.target_gender || "all"}`);
+      }
+      if (brandMemories.length) {
+        const memStr = brandMemories.map((m) => `${m.key}: ${m.value}`).join(" | ");
+        brandParts.push(`Client memory: ${memStr}`);
+      }
+      if (brandParts.length) {
+        finalPrompt = `BRAND IDENTITY:\n${brandParts.map((p) => `- ${p}`).join("\n")}\n\nDesign specifically for this brand using the exact colors and tone above.\n\n${finalPrompt}`;
+      }
+
       // 4) logo hint
       if (hasLogo) {
         finalPrompt =
@@ -2419,6 +2461,28 @@ async function enrichResultWithGenerateImage(result, businessId, ctx = {}) {
       const { error } = await supabaseAdmin.from("media_library").insert(row);
       if (error) {
         console.warn("[media_library] insert failed:", error.message);
+      }
+
+      // save generation learning to client_memory
+      try {
+        await supabaseAdmin.from("client_memory").upsert(
+          {
+            business_id: String(businessId),
+            category: "brand",
+            key: "last_image_style",
+            value: JSON.stringify({
+              prompt: extracted.prompt,
+              brand_colors_used: biz?.brand_colors || null,
+              generated_at: new Date().toISOString(),
+              feedback: "pending",
+            }),
+            source: "maya_generation",
+            confidence: 80,
+          },
+          { onConflict: "business_id,category,key" },
+        );
+      } catch {
+        // non-critical
       }
     }
   } catch (e) {
@@ -3528,6 +3592,38 @@ app.post(
         console.warn("[POST /api/media-library] supabase:", error.message);
         return res.status(500).json({ error: error.message });
       }
+
+      // track approved style in client_memory
+      if (row.prompt && row.agent === "maya") {
+        try {
+          const { data: existing } = await supabaseAdmin
+            .from("client_memory")
+            .select("value")
+            .eq("business_id", String(business_id))
+            .eq("category", "brand")
+            .eq("key", "approved_styles")
+            .maybeSingle();
+          const styles = existing?.value ? JSON.parse(String(existing.value)) : [];
+          if (Array.isArray(styles)) {
+            styles.push({ prompt: row.prompt, saved_at: new Date().toISOString() });
+            if (styles.length > 20) styles.splice(0, styles.length - 20);
+          }
+          await supabaseAdmin.from("client_memory").upsert(
+            {
+              business_id: String(business_id),
+              category: "brand",
+              key: "approved_styles",
+              value: JSON.stringify(styles),
+              source: "user_save",
+              confidence: 95,
+            },
+            { onConflict: "business_id,category,key" },
+          );
+        } catch {
+          // non-critical
+        }
+      }
+
       return res.json({ item: data });
     } catch (e) {
       return res.status(500).json({
