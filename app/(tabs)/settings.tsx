@@ -224,26 +224,42 @@ export default function SettingsScreen() {
   const onConnectMeta = useCallback(async () => {
     if (!business?.id) return;
     setMetaBusy(true);
+
+    // On web: detect mobile by viewport width (popup blockers are aggressive on mobile)
+    const isWeb = Platform.OS === "web" && typeof window !== "undefined";
+    const isMobileWeb = isWeb && window.innerWidth < 768;
+
+    // Open window SYNCHRONOUSLY (before await) to preserve the user-gesture chain.
+    // Mobile browsers silently block window.open if it happens after an async call.
+    let popup: Window | null = null;
+    if (isWeb && !isMobileWeb) {
+      popup = window.open("about:blank", "meta-oauth", "width=560,height=720,scrollbars=yes");
+    }
+
     try {
       const res = await fetchAdchatApi(
         `${API_BASE}/auth/meta?business_id=${encodeURIComponent(business.id)}`,
       );
       const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !json.url) {
+        if (popup) popup.close();
         Alert.alert("שגיאה", json.error || "לא התקבלה כתובת OAuth");
         return;
       }
 
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const popup = window.open(
-          json.url,
-          "meta-oauth",
-          "width=560,height=720,scrollbars=yes",
-        );
-        if (!popup) {
-          Alert.alert("", "נראה שהפופאפ נחסם. אפשר פופאפים ונסה שוב.");
+      if (isMobileWeb) {
+        // Mobile web: full-page redirect (popups are unreliable)
+        window.location.href = json.url;
+        return;
+      }
+
+      if (isWeb) {
+        // Desktop web: navigate the pre-opened popup
+        if (!popup || popup.closed) {
+          Alert.alert("", "נראה שהפופאפ נחסם. אפשרו פופאפים ונסו שוב.");
           return;
         }
+        popup.location.href = json.url;
 
         // Poll until meta_user_id is set (or 2 minutes)
         if (metaPollIntervalRef.current) clearInterval(metaPollIntervalRef.current);
@@ -274,6 +290,7 @@ export default function SettingsScreen() {
           metaPollTimeoutRef.current = null;
         }, 120000);
       } else {
+        // Native app (iOS/Android)
         await Linking.openURL(json.url);
         Alert.alert(
           "המשך בדפדפן",
@@ -281,6 +298,7 @@ export default function SettingsScreen() {
         );
       }
     } catch (e) {
+      if (popup) popup.close();
       Alert.alert("שגיאה", e instanceof Error ? e.message : "לא ניתן להתחבר ל‑Meta");
     } finally {
       setMetaBusy(false);
