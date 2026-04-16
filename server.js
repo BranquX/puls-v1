@@ -300,6 +300,7 @@ async function applyWebsiteDeepScrapeToDatabase(businessId, websiteUrl, analysis
       target_gender: mapTargetGenderToBusinessDb(a.target_gender),
       target_geo: str(a.target_location) || null,
       brand_differentiator: str(a.unique_value) || null,
+      brand_style_preference: str(a.brand_style) || null,
       competitors: compList.length ? compList : null,
     })
     .eq("id", bid);
@@ -337,6 +338,7 @@ async function applyWebsiteDeepScrapeToDatabase(businessId, websiteUrl, analysis
     ["brand", "competitive_advantage", str(a.unique_value)],
     ["goals", "has_ecommerce", a.has_ecommerce === true ? "true" : "false"],
     ["goals", "has_booking", a.has_booking === true ? "true" : "false"],
+    ["goals", "has_whatsapp", a.has_whatsapp === true ? "true" : "false"],
     ["goals", "pain_points", jsonArrStr(a.pain_points)],
     ["goals", "primary_ad_goal", primaryGoal],
     ["goals", "monthly_budget", "לא צוין"],
@@ -2733,14 +2735,68 @@ async function callAnthropicApi(systemPrompt, anthropicMessages, options) {
   return { ok: true, status: 200, text };
 }
 
+async function fetchJinaMarkdown(pageUrl) {
+  const jinaUrl = `https://r.jina.ai/${pageUrl}`;
+  const headers = {
+    Accept: "text/markdown",
+    "X-Return-Format": "markdown",
+    "X-Timeout": "15",
+  };
+  const jinaKey = (process.env.JINA_API_KEY || "").trim();
+  if (jinaKey) headers.Authorization = `Bearer ${jinaKey}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(jinaUrl, { headers, signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
 async function scrapeWebsiteDeep(url) {
   try {
-    const { html, finalUrl } = await fetchHtmlWithTimeout(url, 10000);
-    const htmlChunk = html.slice(0, 10000);
+    // Try Jina Reader first (much better markdown extraction)
+    let markdown = await fetchJinaMarkdown(url);
+    let usedJina = !!markdown;
+
+    // Multi-page: also scrape /about and /contact for richer data
+    if (markdown) {
+      const base = url.replace(/\/+$/, "");
+      const extraPages = [`${base}/about`, `${base}/contact`];
+      const extras = await Promise.allSettled(
+        extraPages.map((p) => fetchJinaMarkdown(p)),
+      );
+      for (const r of extras) {
+        if (r.status === "fulfilled" && r.value) {
+          markdown += `\n\n---PAGE BREAK---\n\n${r.value}`;
+        }
+      }
+    }
+
+    // Fallback to raw HTML if Jina fails
+    let finalUrl = url;
+    if (!markdown) {
+      const { html, finalUrl: fu } = await fetchHtmlWithTimeout(url, 10000);
+      finalUrl = fu;
+      markdown = html.slice(0, 10000);
+      usedJina = false;
+    }
+
+    const contentChunk = markdown.slice(0, 15000);
     const system =
-      "You are a web analyst for a digital advertising agency. Output ONLY one valid JSON object. No markdown fences, no commentary. Use Hebrew for human-facing string values where natural. For unknown fields use empty string \"\", empty array [], or false.";
-    const schema = `{
-  "business_name":"","tagline":"","description":"","industry":"","phone":"","email":"","address":"","city":"","website":"",
+      "You are a brand intelligence expert for a digital advertising agency. Output ONLY one valid JSON object. No markdown fences, no commentary. Use Hebrew for human-facing string values where natural. For unknown fields use empty string \"\", empty array [], or false.";
+    const user = `Analyze this website content and extract comprehensive brand information.
+
+Website content (${usedJina ? "clean markdown from multiple pages" : "raw HTML"}):
+${contentChunk}
+
+Return ONLY a JSON object with exactly these keys:
+{
+  "business_name":"","tagline":"","description":"","industry":"","phone":"","email":"","address":"","city":"","website":"${finalUrl}",
   "services":[],"products":[],"price_range":"","unique_value":"","certifications":[],"years_in_business":"",
   "target_audience":"","target_age":"","target_gender":"","target_location":"","target_interests":[],
   "brand_colors":[],"brand_style":"","brand_tone":"","fonts_style":"",
@@ -2749,13 +2805,6 @@ async function scrapeWebsiteDeep(url) {
   "has_ecommerce":false,"has_booking":false,"has_whatsapp":false,
   "competitors_mentioned":[],"keywords":[],"seasonal_relevance":""
 }`;
-    const user = `Analyze this HTML and return a single JSON object with exactly these keys (types as in the template):
-${schema}
-
-Set "website" to the business site URL if inferable, else use: ${finalUrl}
-
-HTML:
-${htmlChunk}`;
 
     const r = await callAnthropicApi(
       system,
@@ -2765,6 +2814,7 @@ ${htmlChunk}`;
     if (!r.ok) return null;
     const o = tryParseJsonObjectLoose(r.text);
     if (!o || typeof o !== "object") return null;
+    console.log(`[scrapeWebsiteDeep] ${usedJina ? "Jina" : "HTML fallback"}, content length: ${contentChunk.length}`);
     return o;
   } catch (e) {
     console.warn("[scrapeWebsiteDeep]", e instanceof Error ? e.message : e);
