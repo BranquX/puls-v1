@@ -1484,6 +1484,14 @@ function ChatBubble({
                               mime_type={selectedImage?.mime_type || "image/png"}
                               label="⬇️ הורד"
                             />
+                            {businessId ? (
+                              <SaveAsTemplateButton
+                                businessId={businessId}
+                                prompt={text}
+                                thumbnail_base64={selectedImage?.image_base64 || ""}
+                                colors={colors}
+                              />
+                            ) : null}
                           </View>
                         </View>
                       </Modal>
@@ -1703,6 +1711,56 @@ function SaveImageButton({
         accessibilityLabel="שמור תמונה"
       >
         <Text style={styles.saveImageBtnText}>{btnLabel}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function SaveAsTemplateButton({
+  businessId,
+  prompt,
+  thumbnail_base64,
+  colors,
+}: {
+  businessId: string;
+  prompt: string;
+  thumbnail_base64: string;
+  colors: ReturnType<typeof useTheme>["colors"];
+}) {
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const onSave = async () => {
+    if (saving || saved) return;
+    setSaving(true);
+    try {
+      const res = await fetchAdchatApi(`${API_BASE}/api/brand-templates`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          business_id: businessId,
+          name: prompt.slice(0, 60) || "תבנית",
+          prompt,
+          thumbnail_base64: thumbnail_base64.slice(0, 50000),
+        }),
+      });
+      if (res.ok) setSaved(true);
+    } catch { /* ignore */ } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.saveImageRow}>
+      <TouchableOpacity
+        onPress={() => void onSave()}
+        style={[styles.saveImageBtnTouchable, { backgroundColor: saved ? "rgba(74,222,128,0.2)" : colors.inputBg, borderColor: colors.cardBorder, borderWidth: 1 }]}
+        activeOpacity={0.85}
+        disabled={saving || saved}
+      >
+        <Text style={[styles.saveImageBtnText, { color: colors.text }]}>
+          {saved ? "✓ נשמר כתבנית" : saving ? "שומר..." : "📌 שמור כתבנית"}
+        </Text>
       </TouchableOpacity>
     </View>
   );

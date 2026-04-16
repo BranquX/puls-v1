@@ -13,6 +13,7 @@ import {
   Image,
   Linking,
   Modal,
+  Pressable,
   SafeAreaView,
   StatusBar,
 } from "react-native";
@@ -145,8 +146,10 @@ export default function SettingsScreen() {
   const [cSecondary, setCSecondary] = useState("#22C55E");
   const [cText, setCText] = useState("#FFFFFF");
   const [brandFont, setBrandFont] = useState<BrandFont>("Modern");
+  const [brandSecondaryFont, setBrandSecondaryFont] = useState("");
   const [brandTone, setBrandTone] = useState<string[]>([]);
   const [brandAvoid, setBrandAvoid] = useState("");
+  const [stylePreference, setStylePreference] = useState("");
   const [colorPicker, setColorPicker] = useState<{
     open: boolean;
     key: "primary" | "secondary" | "text" | null;
@@ -474,8 +477,10 @@ export default function SettingsScreen() {
       cSecondary: normalizeHex(cSecondary),
       cText: normalizeHex(cText),
       brandFont,
+      brandSecondaryFont: brandSecondaryFont.trim(),
       brandTone,
       brandAvoid: brandAvoid.trim(),
+      stylePreference,
       ageMin,
       ageMax,
       gender,
@@ -497,8 +502,10 @@ export default function SettingsScreen() {
     cSecondary,
     cText,
     brandFont,
+    brandSecondaryFont,
     brandTone,
     brandAvoid,
+    stylePreference,
     ageMin,
     ageMax,
     gender,
@@ -532,8 +539,10 @@ export default function SettingsScreen() {
 
     const bf = String((business as any).brand_font || "").trim() as BrandFont;
     setBrandFont((["Modern", "Classic", "Bold", "Minimal"] as const).includes(bf) ? bf : "Modern");
+    setBrandSecondaryFont(String((business as any).brand_secondary_font || ""));
     setBrandTone(ensureToneArray((business as any).brand_tone));
     setBrandAvoid(String((business as any).brand_avoid || ""));
+    setStylePreference(String((business as any).brand_style_preference || ""));
 
     const am = Number((business as any).target_age_min ?? 18);
     const ax = Number((business as any).target_age_max ?? 65);
@@ -563,8 +572,10 @@ export default function SettingsScreen() {
           (["Modern", "Classic", "Bold", "Minimal"] as const).includes(bf)
             ? bf
             : "Modern",
+        brandSecondaryFont: String((business as any).brand_secondary_font || "").trim(),
         brandTone: ensureToneArray((business as any).brand_tone),
         brandAvoid: String((business as any).brand_avoid || "").trim(),
+        stylePreference: String((business as any).brand_style_preference || ""),
         ageMin: Number.isFinite(am) ? Math.max(18, Math.min(65, Math.round(am))) : 18,
         ageMax: Number.isFinite(ax) ? Math.max(18, Math.min(65, Math.round(ax))) : 65,
         gender: g === "men" || g === "women" || g === "all" ? g : "all",
@@ -736,8 +747,10 @@ export default function SettingsScreen() {
           text: normalizeHex(cText),
         },
         brand_font: brandFont,
+        brand_secondary_font: brandSecondaryFont.trim() || null,
         brand_tone: brandTone,
         brand_avoid: brandAvoid.trim() || null,
+        brand_style_preference: stylePreference || null,
         target_age_min: Math.min(ageMin, ageMax),
         target_age_max: Math.max(ageMin, ageMax),
         target_gender: gender,
@@ -778,8 +791,10 @@ export default function SettingsScreen() {
     cSecondary,
     cText,
     brandFont,
+    brandSecondaryFont,
     brandTone,
     brandAvoid,
+    stylePreference,
     ageMin,
     ageMax,
     gender,
@@ -1440,12 +1455,51 @@ export default function SettingsScreen() {
               />
             </View>
 
-            <Text style={[styles.sectionTitle, { marginTop: 18, color: colors.text }]}>פונט מועדף</Text>
+            <Text style={[styles.sectionTitle, { marginTop: 18, color: colors.text }]}>שפה עיצובית</Text>
+            <Text style={[styles.subtle, { color: colors.textMuted }]}>
+              בחר את הסגנון הוויזואלי המרכזי של המותג
+            </Text>
+            <View style={styles.styleCardsRow}>
+              {([
+                { key: "minimalist", label: "מינימליסטי", desc: "נקי, מרווח, פשוט", icon: "◻️" },
+                { key: "colorful", label: "צבעוני", desc: "אנרגטי, נועז, תוסס", icon: "🎨" },
+                { key: "professional", label: "מקצועי", desc: "אמין, רציני, נקי", icon: "💼" },
+                { key: "friendly", label: "ידידותי", desc: "חם, נגיש, קליל", icon: "😊" },
+              ] as const).map((s) => (
+                <Pressable
+                  key={s.key}
+                  style={[
+                    styles.styleCard,
+                    { backgroundColor: colors.inputBg, borderColor: stylePreference === s.key ? "#60A5FA" : colors.cardBorder },
+                    stylePreference === s.key && styles.styleCardActive,
+                  ]}
+                  onPress={() => setStylePreference(stylePreference === s.key ? "" : s.key)}
+                >
+                  <Text style={styles.styleCardIcon}>{s.icon}</Text>
+                  <Text style={[styles.styleCardLabel, { color: colors.text }]}>{s.label}</Text>
+                  <Text style={[styles.styleCardDesc, { color: colors.textMuted }]}>{s.desc}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionTitle, { marginTop: 18, color: colors.text }]}>פונט ראשי</Text>
             <View style={styles.chipsRow}>
               {(["Modern", "Classic", "Bold", "Minimal"] as BrandFont[]).map((f) => (
                 <Chip key={f} label={f} on={brandFont === f} onPress={() => setBrandFont(f)} themeColors={colors} />
               ))}
             </View>
+
+            <Text style={[styles.sectionTitle, { marginTop: 12, color: colors.text }]}>פונט משני</Text>
+            <LabeledInput
+              label=""
+              placeholder="לדוגמה: Rubik, Assistant, Heebo..."
+              value={brandSecondaryFont}
+              onChangeText={setBrandSecondaryFont}
+              focused={focusedKey === "secFont"}
+              onFocus={() => setFocusedKey("secFont")}
+              onBlur={() => setFocusedKey(null)}
+              themeColors={colors}
+            />
 
             <View style={[styles.labelRow, { marginTop: 18 }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>טון תקשורת</Text>
@@ -2027,6 +2081,37 @@ const styles = StyleSheet.create({
     color: "rgba(156,163,175,0.75)",
     fontSize: 12,
     fontWeight: "700",
+  },
+  styleCardsRow: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 12,
+  },
+  styleCard: {
+    width: "47%" as any,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: "center",
+    gap: 4,
+  },
+  styleCardActive: {
+    borderColor: "#60A5FA",
+    borderWidth: 2,
+  },
+  styleCardIcon: {
+    fontSize: 22,
+  },
+  styleCardLabel: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    textAlign: "center" as const,
+  },
+  styleCardDesc: {
+    fontSize: 11,
+    textAlign: "center" as const,
   },
   chipsRow: {
     flexDirection: "row-reverse",

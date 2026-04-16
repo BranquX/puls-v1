@@ -767,14 +767,23 @@ function buildBrandKitSystemBlock(row) {
       ? JSON.stringify(row.competitors).slice(0, 800)
       : "";
 
+  const stylePreference = row.brand_style_preference != null && String(row.brand_style_preference).trim()
+    ? String(row.brand_style_preference).trim()
+    : "";
+  const secondaryFont = row.brand_secondary_font != null && String(row.brand_secondary_font).trim()
+    ? String(row.brand_secondary_font).trim()
+    : "";
+
   const lines = [
     "## Brand Kit של הלקוח:",
     `לוגו: ${hasLogo}`,
     `תיאור עסק: ${row.description != null && String(row.description).trim() ? String(row.description).trim() : "—"}`,
+    `סגנון עיצובי: ${stylePreference || "—"}`,
     `טון מועדף: ${tones.length ? tones.join(", ") : "—"}`,
     `מה להימנע: ${row.brand_avoid != null && String(row.brand_avoid).trim() ? String(row.brand_avoid).trim() : "—"}`,
     `צבעי מותג: ${colors && String(colors).trim() ? String(colors).trim() : "—"}`,
-    `פונט: ${row.brand_font != null && String(row.brand_font).trim() ? String(row.brand_font).trim() : "—"}`,
+    `פונט ראשי: ${row.brand_font != null && String(row.brand_font).trim() ? String(row.brand_font).trim() : "—"}`,
+    `פונט משני: ${secondaryFont || "—"}`,
     "",
     "## קהל יעד:",
     `גיל: ${row.target_age_min != null ? row.target_age_min : "—"}-${row.target_age_max != null ? row.target_age_max : "—"}`,
@@ -1626,19 +1635,23 @@ const AGENT_PROMPTS = {
 - תקציב יומי מינימלי = CPA יעד × 5
 - TOFU 15%–25% | MOFU 20%–30% | BOFU 40%–55% | Retargeting 10%–20%`,
 
-  maya: `את מאיה — Creative Director.
-חוקים:
-1. כשמבקשים תמונה — החזירי JSON מיד, ללא שאלות:
-   {"action":"generate_image","prompt":"...","aspect_ratio":"1:1"}
-2. הprompt תמיד באנגלית ומפורט (layout, style, lighting, typography if needed) ומותאם לקהל
-3. תמיד 1:1 (1080x1080) לפייסבוק
-4. לפני כל יצירת תמונה, קראי את נתוני המותג מהזיכרון (Brand Kit + Client Memory + website_content)
-5. השתמשי תמיד בצבעי המותג הספציפיים של הלקוח — אל תמציאי צבעים
-6. אם יש לוגו — שלבי אותו בפינה בצורה עדינה
-7. הסגנון חייב להתאים לטון המותג (מקצועי/צעיר/חם וכו')
-8. שמרי עקביות בין כל הגרפיקות של אותו לקוח — בדקי approved_styles מהזיכרון
-9. אל תשאלי שאלות — צרי מיד
-החזרי JSON בלבד, בלי markdown, בלי טקסט נוסף.`,
+  maya: `את מאיה — קריאייטיב דירקטור AI של Puls.
+
+לפני כל יצירת תמונה חובה לקרוא מהזיכרון:
+- brand_colors, brand_style_preference, brand_fonts, brand_avoid
+- approved_styles — גרפיקות שהלקוח אישר (חקי את הסגנון!)
+
+כללי זהב:
+1. תמיד צבעי המותג המדויקים — אל תמציאי צבעים
+2. עקביות סגנון בין כל הגרפיקות של אותו לקוח
+3. תבניות מאושרות = בסיס לגרפיקות חדשות
+4. תמיד 1080x1080 לפייסבוק
+5. לוגו בפינה בצורה עדינה (אם קיים)
+6. פרומפט ל-Gemini תמיד באנגלית ומפורט (layout, style, lighting, typography)
+7. אל תשאלי שאלות — צרי מיד
+
+JSON format תמיד:
+{"action":"generate_image","prompt":"detailed english prompt...","aspect_ratio":"1:1","context":"facebook_ad"}`,
 
   noa: `את נועה — אסטרטגיסטית תוכן.
 חוקים:
@@ -2324,7 +2337,7 @@ async function enrichResultWithGenerateImage(result, businessId, ctx = {}) {
       // 2) שלוף מידע עסקי + מותג מטבלת businesses
       const { data: biz } = await supabaseAdmin
         .from("businesses")
-        .select("website,brand_logo,brand_colors,brand_font,brand_tone,brand_differentiator,description,name,industry,target_age_min,target_age_max,target_gender")
+        .select("website,brand_logo,brand_colors,brand_font,brand_tone,brand_differentiator,description,name,industry,target_age_min,target_age_max,target_gender,brand_style_preference,brand_secondary_font")
         .eq("id", bid)
         .maybeSingle();
       const businessWebsite =
@@ -2395,13 +2408,29 @@ async function enrichResultWithGenerateImage(result, businessId, ctx = {}) {
       if (Array.isArray(biz?.brand_tone) && biz.brand_tone.length) {
         brandParts.push(`Brand tone: ${biz.brand_tone.join(", ")}`);
       }
-      if (biz?.brand_font) brandParts.push(`Brand font: ${biz.brand_font}`);
+      if (biz?.brand_font) brandParts.push(`Primary font: ${biz.brand_font}`);
+      if (biz?.brand_secondary_font) brandParts.push(`Secondary font: ${biz.brand_secondary_font}`);
+      if (biz?.brand_style_preference) brandParts.push(`Visual style: ${biz.brand_style_preference}`);
       if (biz?.brand_differentiator) brandParts.push(`Unique value proposition: ${biz.brand_differentiator}`);
       if (biz?.target_age_min || biz?.target_age_max || biz?.target_gender) {
         brandParts.push(`Target audience: ages ${biz.target_age_min || 18}-${biz.target_age_max || 65}, ${biz.target_gender || "all"}`);
       }
-      if (brandMemories.length) {
-        const memStr = brandMemories.map((m) => `${m.key}: ${m.value}`).join(" | ");
+      // approved styles from memory
+      const approvedMem = brandMemories.find((m) => m.key === "approved_styles");
+      if (approvedMem?.value) {
+        try {
+          const styles = JSON.parse(String(approvedMem.value));
+          if (Array.isArray(styles) && styles.length) {
+            const recent = styles.slice(-5).map((s) => s.prompt || s).filter(Boolean);
+            if (recent.length) {
+              brandParts.push(`APPROVED STYLE EXAMPLES (follow these closely):\n${recent.join("\n")}`);
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      const otherMem = brandMemories.filter((m) => m.key !== "approved_styles");
+      if (otherMem.length) {
+        const memStr = otherMem.map((m) => `${m.key}: ${m.value}`).join(" | ");
         brandParts.push(`Client memory: ${memStr}`);
       }
       if (brandParts.length) {
@@ -3655,6 +3684,120 @@ app.delete(
       return res.status(500).json({
         error: e instanceof Error ? e.message : String(e),
       });
+    }
+  },
+);
+
+// ============================================================
+// Brand Templates
+// ============================================================
+
+app.get(
+  "/api/brand-templates",
+  requireBearerAuthorization,
+  async (req, res) => {
+    const businessId = req.query.business_id;
+    if (!businessId || !isUuid(String(businessId))) {
+      return res.status(400).json({ error: "חסר או לא תקין business_id" });
+    }
+    try {
+      const { data: mem } = await supabaseAdmin
+        .from("client_memory")
+        .select("value,updated_at")
+        .eq("business_id", String(businessId))
+        .eq("category", "brand")
+        .eq("key", "templates")
+        .maybeSingle();
+      const templates = mem?.value ? JSON.parse(String(mem.value)) : [];
+      return res.json({ templates: Array.isArray(templates) ? templates : [] });
+    } catch (e) {
+      return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+);
+
+app.post(
+  "/api/brand-templates",
+  requireBearerAuthorization,
+  async (req, res) => {
+    const { business_id, name, prompt, thumbnail_base64 } = req.body || {};
+    if (!business_id || !isUuid(String(business_id))) {
+      return res.status(400).json({ error: "חסר business_id" });
+    }
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({ error: "חסר prompt" });
+    }
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from("client_memory")
+        .select("value")
+        .eq("business_id", String(business_id))
+        .eq("category", "brand")
+        .eq("key", "templates")
+        .maybeSingle();
+      const templates = existing?.value ? JSON.parse(String(existing.value)) : [];
+      const arr = Array.isArray(templates) ? templates : [];
+      const tpl = {
+        id: `tpl-${Date.now()}`,
+        name: String(name || "").trim() || "תבנית ללא שם",
+        prompt: String(prompt).trim(),
+        thumbnail_base64: thumbnail_base64 ? String(thumbnail_base64).slice(0, 50000) : null,
+        created_at: new Date().toISOString(),
+      };
+      arr.push(tpl);
+      if (arr.length > 20) arr.splice(0, arr.length - 20);
+      await supabaseAdmin.from("client_memory").upsert(
+        {
+          business_id: String(business_id),
+          category: "brand",
+          key: "templates",
+          value: JSON.stringify(arr),
+          source: "user_template",
+          confidence: 100,
+        },
+        { onConflict: "business_id,category,key" },
+      );
+      return res.json({ template: tpl });
+    } catch (e) {
+      return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+);
+
+app.delete(
+  "/api/brand-templates/:id",
+  requireBearerAuthorization,
+  async (req, res) => {
+    const templateId = req.params.id;
+    const businessId = req.query.business_id;
+    if (!businessId || !isUuid(String(businessId))) {
+      return res.status(400).json({ error: "חסר business_id" });
+    }
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from("client_memory")
+        .select("value")
+        .eq("business_id", String(businessId))
+        .eq("category", "brand")
+        .eq("key", "templates")
+        .maybeSingle();
+      const templates = existing?.value ? JSON.parse(String(existing.value)) : [];
+      const arr = Array.isArray(templates) ? templates : [];
+      const filtered = arr.filter((t) => t.id !== templateId);
+      await supabaseAdmin.from("client_memory").upsert(
+        {
+          business_id: String(businessId),
+          category: "brand",
+          key: "templates",
+          value: JSON.stringify(filtered),
+          source: "user_template",
+          confidence: 100,
+        },
+        { onConflict: "business_id,category,key" },
+      );
+      return res.json({ ok: true });
+    } catch (e) {
+      return res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
     }
   },
 );
@@ -6460,6 +6603,56 @@ app.listen(PORT, () => {
     };
     setInterval(() => void weeklyTick(), 60 * 60 * 1000);
   }
+
+  // Creative fatigue cron: check every 6 hours for images older than 21 days
+  const FATIGUE_DAYS = 21;
+  let lastFatigueRun = "";
+  const fatigueTick = async () => {
+    const dayKey = new Date().toISOString().slice(0, 10);
+    if (lastFatigueRun === dayKey) return;
+    lastFatigueRun = dayKey;
+    try {
+      const cutoff = new Date(Date.now() - FATIGUE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const { data: staleImages } = await supabaseAdmin
+        .from("media_library")
+        .select("id,business_id,prompt,created_at")
+        .eq("agent", "maya")
+        .lt("created_at", cutoff)
+        .is("fatigue_alert_sent", null)
+        .limit(50);
+      if (!staleImages?.length) return;
+      const grouped = {};
+      for (const img of staleImages) {
+        if (!grouped[img.business_id]) grouped[img.business_id] = [];
+        grouped[img.business_id].push(img);
+      }
+      let alertsCreated = 0;
+      for (const [bid, images] of Object.entries(grouped)) {
+        try {
+          await supabaseAdmin.from("proactive_messages").insert({
+            business_id: bid,
+            type: "creative_fatigue",
+            title: "הגיע הזמן לרענן את הקריאייטיב",
+            body: `${images.length} גרפיקות פעילות כבר ${FATIGUE_DAYS} יום — רענון הקריאייטיב ישפר את הביצועים. שאלי את מאיה ליצור גרפיקות חדשות בסגנון עדכני.`,
+            meta: JSON.stringify({ image_count: images.length, oldest: images[0].created_at }),
+          });
+          const ids = images.map((i) => i.id);
+          await supabaseAdmin
+            .from("media_library")
+            .update({ fatigue_alert_sent: true })
+            .in("id", ids);
+          alertsCreated++;
+        } catch (e) {
+          console.warn("[fatigue-cron] biz error:", e instanceof Error ? e.message : String(e));
+        }
+      }
+      console.log(`[fatigue-cron] done. alerts: ${alertsCreated}`);
+    } catch (e) {
+      console.warn("[fatigue-cron] error:", e instanceof Error ? e.message : String(e));
+    }
+  };
+  setTimeout(() => void fatigueTick(), 30_000);
+  setInterval(() => void fatigueTick(), 6 * 60 * 60 * 1000);
 });
 
 // HTTPS server for Facebook OAuth callback

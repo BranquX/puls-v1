@@ -52,6 +52,10 @@ ALTER TABLE businesses ADD COLUMN IF NOT EXISTS phone text;
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS description text;
 
+-- Brand Kit v2
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS brand_style_preference text;
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS brand_secondary_font text;
+
 ALTER TABLE businesses DISABLE ROW LEVEL SECURITY;
 
 -- ============================================================
@@ -189,6 +193,8 @@ CREATE TABLE IF NOT EXISTS media_library (
 );
 
 CREATE INDEX IF NOT EXISTS idx_media_library_business ON media_library (business_id, created_at DESC);
+
+ALTER TABLE media_library ADD COLUMN IF NOT EXISTS fatigue_alert_sent boolean;
 
 ALTER TABLE media_library DISABLE ROW LEVEL SECURITY;
 
