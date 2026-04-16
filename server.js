@@ -435,7 +435,7 @@ const GEMINI_API_KEY = requireEnv("GEMINI_API_KEY");
 const META_APP_SECRET = requireEnv("META_APP_SECRET");
 
 const META_APP_ID = process.env.META_APP_ID || "950143061210639";
-const META_CONFIG_ID = process.env.META_CONFIG_ID || "";
+const META_CONFIG_ID = process.env.META_CONFIG_ID || "800335946473510";
 const META_REDIRECT_URI =
   process.env.META_REDIRECT_URI || "https://localhost:3002/auth/meta/callback";
 const APP_WEB_ORIGIN = process.env.APP_WEB_ORIGIN || "http://localhost:8081";
@@ -5730,17 +5730,12 @@ app.get("/auth/meta", requireBearerAuthorization, async (req, res) => {
   params.set("state", String(businessId));
   params.set("response_type", "code");
 
-  // Business-type apps MUST use config_id — Facebook forces the
-  // /dialog/oauth/business/ flow regardless. The redirect_uri must
-  // also be registered in the Login Configuration in the Meta dashboard.
-  if (META_CONFIG_ID) {
-    params.set("config_id", META_CONFIG_ID);
-  } else {
-    params.set("scope", META_OAUTH_SCOPES);
-  }
+  params.set("config_id", META_CONFIG_ID);
+  params.set("scope", META_OAUTH_SCOPES);
 
   const url = `https://www.facebook.com/${GRAPH_API_VERSION}/dialog/oauth?${params.toString()}`;
   console.log("[GET /auth/meta] OAuth URL:", url);
+  console.log("[GET /auth/meta] config_id:", META_CONFIG_ID, "| redirect_uri:", META_REDIRECT_URI);
   return res.json({ url });
 });
 
