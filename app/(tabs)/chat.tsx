@@ -902,6 +902,16 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
+      {!business?.selected_ad_account_id && business?.meta_user_id ? (
+        <Pressable
+          style={styles.warnBanner}
+          onPress={() => router.push("/(tabs)/settings" as any)}
+        >
+          <Text style={styles.warnText}>לא נבחר חשבון פרסום — עבור להגדרות</Text>
+          <Text style={styles.warnArrow}>←</Text>
+        </Pressable>
+      ) : null}
+
       <View style={isDesktop ? styles.desktopMessagesWrap : styles.mobileMessagesWrap}>
         <FlatList
           ref={(r) => {
@@ -2139,6 +2149,13 @@ function agentLabelFromAny(agent: unknown): string {
 }
 
 const styles = StyleSheet.create({
+  warnBanner: {
+    flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 8, paddingHorizontal: 14, marginHorizontal: 12, marginBottom: 4,
+    borderRadius: 10, borderWidth: 1, backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.25)",
+  },
+  warnText: { color: "#EAB308", fontSize: 12, fontWeight: "700", writingDirection: "rtl", flex: 1 },
+  warnArrow: { color: "#EAB308", fontSize: 14, fontWeight: "700", marginStart: 8 },
   centerBoot: {
     alignItems: "center",
     justifyContent: "center",

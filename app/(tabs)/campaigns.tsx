@@ -338,6 +338,16 @@ export default function CampaignsScreen() {
           </ScrollView>
         </View>
 
+        {!business?.selected_ad_account_id && connected ? (
+          <Pressable
+            style={[styles.warnBanner, { backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.25)" }]}
+            onPress={() => router.push("/(tabs)/settings" as any)}
+          >
+            <Text style={styles.warnText}>לא נבחר חשבון פרסום — עבור להגדרות לבחור</Text>
+            <Text style={styles.warnArrow}>←</Text>
+          </Pressable>
+        ) : null}
+
         {/* Summary bar */}
         {filtered.length > 0 && (
           <View style={[styles.summaryBar, { borderBottomColor: colors.separator, paddingHorizontal: isDesktop ? "5%" : 16 }]}>
@@ -536,6 +546,30 @@ const styles = StyleSheet.create({
   objective: { fontSize: 12, fontWeight: "600", writingDirection: "rtl", textAlign: "right" },
   statusPill: { flexDirection: "row-reverse", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
+  warnBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  warnText: {
+    color: "#EAB308",
+    fontSize: 13,
+    fontWeight: "700",
+    writingDirection: "rtl",
+    flex: 1,
+  },
+  warnArrow: {
+    color: "#EAB308",
+    fontSize: 16,
+    fontWeight: "700",
+    marginStart: 8,
+  },
   noSpendBadge: {
     flexDirection: "row-reverse",
     alignItems: "center",

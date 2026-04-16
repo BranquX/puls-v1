@@ -770,6 +770,16 @@ export default function AnalyticsScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]}>ניתוח ביצועים</Text>
         </View>
 
+        {!business?.selected_ad_account_id && business?.meta_user_id ? (
+          <Pressable
+            style={styles.warnBanner}
+            onPress={() => router.push("/(tabs)/settings" as any)}
+          >
+            <Text style={styles.warnText}>לא נבחר חשבון פרסום — עבור להגדרות לבחור</Text>
+            <Text style={styles.warnArrow}>←</Text>
+          </Pressable>
+        ) : null}
+
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
@@ -804,6 +814,13 @@ export default function AnalyticsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  warnBanner: {
+    flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 10, paddingHorizontal: 16, marginHorizontal: 14, marginTop: 8,
+    borderRadius: 10, borderWidth: 1, backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.25)",
+  },
+  warnText: { color: "#EAB308", fontSize: 13, fontWeight: "700", writingDirection: "rtl", flex: 1 },
+  warnArrow: { color: "#EAB308", fontSize: 16, fontWeight: "700", marginStart: 8 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
   hint: { fontSize: 14, writingDirection: "rtl" },
   header: { paddingTop: 14, paddingBottom: 14, borderBottomWidth: 1 },
