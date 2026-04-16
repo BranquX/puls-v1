@@ -5077,6 +5077,7 @@ app.get("/api/meta-campaigns", async (req, res) => {
 
     const insightsMap = {};
     const prevInsightsMap = {};
+    const todaySpendMap = {};
     try {
       const currentPromise = fetch(buildGraphUrl(`/${actId}/insights`, accessToken, currentParams))
         .then(r => r.json().catch(() => ({})));
@@ -5086,10 +5087,23 @@ app.get("/api/meta-campaigns", async (req, res) => {
             .then(r => r.json().catch(() => ({})))
         : Promise.resolve({ data: [] });
 
-      const [currentJson, prevJson] = await Promise.all([currentPromise, prevPromise]);
+      const todayPromise = fetch(buildGraphUrl(`/${actId}/insights`, accessToken, {
+        fields: "campaign_id,spend",
+        level: "campaign",
+        limit: "500",
+        date_preset: "today",
+      })).then(r => r.json().catch(() => ({})));
+
+      const [currentJson, prevJson, todayJson] = await Promise.all([currentPromise, prevPromise, todayPromise]);
 
       if (Array.isArray(currentJson.data)) Object.assign(insightsMap, parseInsightsRows(currentJson.data));
       if (Array.isArray(prevJson.data)) Object.assign(prevInsightsMap, parseInsightsRows(prevJson.data));
+      if (Array.isArray(todayJson.data)) {
+        for (const row of todayJson.data) {
+          const cid = row.campaign_id;
+          if (cid) todaySpendMap[cid] = parseFloat(row.spend || "0");
+        }
+      }
     } catch (e) {
       console.warn("[meta-campaigns] batch insights failed:", e instanceof Error ? e.message : e);
     }
@@ -5124,7 +5138,7 @@ app.get("/api/meta-campaigns", async (req, res) => {
         ctr: ins.ctr,
         leads: ins.leads,
         cpl: cpl,
-        // Deltas vs previous period (null = no data)
+        spent_last_24h: todaySpendMap[c.id] || 0,
         delta_spend: pctDelta(ins.spend, prev.spend),
         delta_clicks: pctDelta(ins.clicks, prev.clicks),
         delta_impressions: pctDelta(ins.impressions, prev.impressions),

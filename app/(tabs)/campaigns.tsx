@@ -38,6 +38,7 @@ type MetaCampaign = {
   ctr: number;
   leads: number;
   cpl: number;
+  spent_last_24h: number;
   delta_spend: number | null;
   delta_clicks: number | null;
   delta_impressions: number | null;
@@ -45,12 +46,13 @@ type MetaCampaign = {
   delta_cpl: number | null;
 };
 
-type StatusFilter = "ALL" | "ACTIVE" | "PAUSED" | "ARCHIVED";
+type StatusFilter = "ALL" | "ACTIVE" | "PAUSED" | "ARCHIVED" | "SPENDING";
 
 type DatePreset = "today" | "yesterday" | "last_7d" | "this_month" | "last_30d";
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "ALL", label: "הכל" },
+  { key: "SPENDING", label: "הוציאו תקציב" },
   { key: "ACTIVE", label: "פעילים" },
   { key: "PAUSED", label: "מושהים" },
   { key: "ARCHIVED", label: "ארכיון" },
@@ -73,10 +75,14 @@ function statusLabel(s: string): string {
   return s;
 }
 
-function statusColor(s: string) {
+function statusColor(s: string, spentLast24h = 0) {
   const u = (s || "").toUpperCase();
-  if (u === "ACTIVE") return { bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.3)", text: "#4ADE80", dot: "#22C55E" };
-  if (u === "PAUSED") return { bg: "rgba(234,179,8,0.14)", border: "rgba(234,179,8,0.3)", text: "#FDE047", dot: "#EAB308" };
+  if (u === "ACTIVE" && spentLast24h > 0)
+    return { bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.3)", text: "#4ADE80", dot: "#22C55E" };
+  if (u === "ACTIVE")
+    return { bg: "rgba(234,179,8,0.14)", border: "rgba(234,179,8,0.3)", text: "#FDE047", dot: "#EAB308" };
+  if (u === "PAUSED")
+    return { bg: "rgba(148,163,184,0.12)", border: "rgba(148,163,184,0.22)", text: "#CBD5E1", dot: "#94A3B8" };
   return { bg: "rgba(148,163,184,0.12)", border: "rgba(148,163,184,0.22)", text: "#CBD5E1", dot: "#94A3B8" };
 }
 
@@ -191,12 +197,19 @@ export default function CampaignsScreen() {
 
   const filtered = useMemo(() => {
     if (statusFilter === "ALL") return campaigns;
+    if (statusFilter === "SPENDING") return campaigns.filter((c) => (c.status || "").toUpperCase() === "ACTIVE" && (c.spent_last_24h || 0) > 0);
     return campaigns.filter((c) => (c.status || "").toUpperCase() === statusFilter);
   }, [campaigns, statusFilter]);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = { ALL: campaigns.length };
-    for (const c of campaigns) { const s = (c.status || "").toUpperCase(); m[s] = (m[s] || 0) + 1; }
+    let spending = 0;
+    for (const c of campaigns) {
+      const s = (c.status || "").toUpperCase();
+      m[s] = (m[s] || 0) + 1;
+      if (s === "ACTIVE" && (c.spent_last_24h || 0) > 0) spending++;
+    }
+    m.SPENDING = spending;
     return m;
   }, [campaigns]);
 
@@ -391,7 +404,10 @@ export default function CampaignsScreen() {
             </View>
           ) : (
             filtered.map((c) => {
-              const sc = statusColor(c.status);
+              const isActive = (c.status || "").toUpperCase() === "ACTIVE";
+              const isSpending = isActive && (c.spent_last_24h || 0) > 0;
+              const isActiveNoSpend = isActive && !isSpending;
+              const sc = statusColor(c.status, c.spent_last_24h || 0);
               return (
                 <Pressable
                   key={c.id}
@@ -413,6 +429,11 @@ export default function CampaignsScreen() {
                       <Text style={[styles.statusText, { color: sc.text }]}>{statusLabel(c.status)}</Text>
                     </View>
                   </View>
+                  {isActiveNoSpend ? (
+                    <View style={styles.noSpendBadge}>
+                      <Text style={styles.noSpendText}>פעיל ללא הוצאה ב-24 שעות</Text>
+                    </View>
+                  ) : null}
 
                   {/* Metrics */}
                   <View style={styles.metricsRow}>
@@ -515,6 +536,23 @@ const styles = StyleSheet.create({
   objective: { fontSize: 12, fontWeight: "600", writingDirection: "rtl", textAlign: "right" },
   statusPill: { flexDirection: "row-reverse", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
+  noSpendBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(234,179,8,0.1)",
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    marginTop: 6,
+    alignSelf: "flex-end",
+  },
+  noSpendText: {
+    color: "#EAB308",
+    fontSize: 11,
+    fontWeight: "700",
+    writingDirection: "rtl",
+  },
   statusText: { fontSize: 12, fontWeight: "800", writingDirection: "rtl" },
   metricsRow: { marginTop: 14, flexDirection: "row-reverse", gap: 8 },
   metricBox: { flex: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 6, borderWidth: 1, alignItems: "center" },
