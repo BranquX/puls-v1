@@ -33,6 +33,9 @@ import { firstPasswordValidationError } from "../lib/password-validation";
 import { setAuthRememberPreference, supabase } from "../lib/supabase";
 import { useTheme } from "../contexts/theme-context";
 
+const WEB_TRANSITION: Record<string, string> | undefined =
+  Platform.OS === "web" ? { transition: "all 0.2s ease" } : undefined;
+
 type AuthTab = "login" | "register";
 type AuthView = "main" | "forgot" | "forgot_sent";
 type FieldKey = "email" | "password" | "general";
@@ -126,10 +129,10 @@ function useShake(): {
 }
 
 function FieldError({ text }: { text: string }) {
-  if (!text) return null;
+  if (!text) return <View style={styles.fieldErrorReserved} />;
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
+      entering={FadeInUp.duration(250).easing(Easing.out(Easing.cubic))}
       style={styles.fieldErrorRow}
     >
       <Text style={styles.fieldErrorIcon}>⚠️</Text>
@@ -162,15 +165,20 @@ function EmailIconField({
   colors,
 }: EmailIconFieldProps) {
   const focus = useSharedValue(0);
+  const [focused, setFocused] = useState(false);
   const lineStyle = useAnimatedStyle<ViewStyle>(() => {
     const active = focus.value;
     return {
       borderBottomColor: active
-        ? "rgba(96, 165, 250, 0.95)"
+        ? "#4F6EF7"
         : colors.inputBorder,
       borderBottomWidth: active ? 2 : 1,
     };
   });
+
+  const glowStyle = focused && Platform.OS === "web"
+    ? { boxShadow: "0 2px 12px rgba(79, 110, 247, 0.25)" } as Record<string, string>
+    : undefined;
 
   const row = (
     <View style={styles.iconInputRow}>
@@ -187,9 +195,11 @@ function EmailIconField({
         textAlign="right"
         accessibilityLabel={accessibilityLabel}
         onFocus={() => {
+          setFocused(true);
           focus.value = withTiming(1, { duration: 160 });
         }}
         onBlur={() => {
+          setFocused(false);
           focus.value = withTiming(0, { duration: 200 });
         }}
       />
@@ -201,11 +211,11 @@ function EmailIconField({
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
       <Animated.View style={shakeStyle}>
         {error ? (
-          <View style={[styles.underlineWrap, styles.underlineError]}>
+          <View style={[styles.underlineWrap, styles.underlineError, WEB_TRANSITION]}>
             {row}
           </View>
         ) : (
-          <Animated.View style={[styles.underlineWrap, lineStyle]}>
+          <Animated.View style={[styles.underlineWrap, lineStyle, WEB_TRANSITION, glowStyle]}>
             {row}
           </Animated.View>
         )}
@@ -241,22 +251,30 @@ function PasswordIconField({
   colors,
 }: PasswordIconFieldProps) {
   const focus = useSharedValue(0);
+  const [focused, setFocused] = useState(false);
+  const [eyeHovered, setEyeHovered] = useState(false);
   const lineStyle = useAnimatedStyle<ViewStyle>(() => {
     const active = focus.value;
     return {
       borderBottomColor: active
-        ? "rgba(96, 165, 250, 0.95)"
+        ? "#4F6EF7"
         : colors.inputBorder,
       borderBottomWidth: active ? 2 : 1,
     };
   });
 
+  const glowStyle = focused && Platform.OS === "web"
+    ? { boxShadow: "0 2px 12px rgba(79, 110, 247, 0.25)" } as Record<string, string>
+    : undefined;
+
   const row = (
     <View style={styles.passwordIconRow}>
       <Pressable
         onPress={onToggleShow}
+        onHoverIn={() => setEyeHovered(true)}
+        onHoverOut={() => setEyeHovered(false)}
         hitSlop={12}
-        style={styles.eyeHit}
+        style={[styles.eyeHit, eyeHovered && styles.eyeHitHovered]}
         accessibilityRole="button"
         accessibilityLabel={showPassword ? "הסתר סיסמה" : "הצג סיסמה"}
       >
@@ -274,9 +292,11 @@ function PasswordIconField({
         autoCorrect={false}
         accessibilityLabel={accessibilityLabel}
         onFocus={() => {
+          setFocused(true);
           focus.value = withTiming(1, { duration: 160 });
         }}
         onBlur={() => {
+          setFocused(false);
           focus.value = withTiming(0, { duration: 200 });
         }}
       />
@@ -289,11 +309,11 @@ function PasswordIconField({
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
       <Animated.View style={shakeStyle}>
         {error ? (
-          <View style={[styles.underlineWrap, styles.underlineError]}>
+          <View style={[styles.underlineWrap, styles.underlineError, WEB_TRANSITION]}>
             {row}
           </View>
         ) : (
-          <Animated.View style={[styles.underlineWrap, lineStyle]}>
+          <Animated.View style={[styles.underlineWrap, lineStyle, WEB_TRANSITION, glowStyle]}>
             {row}
           </Animated.View>
         )}
@@ -326,6 +346,11 @@ export default function AuthScreen() {
   const emailShake = useShake();
   const passwordShake = useShake();
   const generalShake = useShake();
+
+  const [submitHovered, setSubmitHovered] = useState(false);
+  const [forgotLinkHovered, setForgotLinkHovered] = useState(false);
+  const [backLinkHovered, setBackLinkHovered] = useState(false);
+  const [tabHovered, setTabHovered] = useState<AuthTab | null>(null);
 
   const clearErrors = useCallback(() => {
     setErrors({});
@@ -663,23 +688,27 @@ export default function AuthScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.submitPressable,
+                        WEB_TRANSITION,
+                        submitHovered && !pressed && styles.submitHovered,
                         pressed && styles.submitPressed,
                         busy && styles.submitDisabled,
                       ]}
+                      onHoverIn={() => setSubmitHovered(true)}
+                      onHoverOut={() => setSubmitHovered(false)}
                       onPress={() => void onForgotSubmit()}
                       disabled={busy}
                     >
                       <LinearGradient
-                        colors={["#4F6EF7", "#4F46E5", "#7C3AED"]}
+                        colors={submitHovered ? ["#5B7CF8", "#5B56E8", "#8B4CF0"] : ["#4F6EF7", "#4F46E5", "#7C3AED"]}
                         start={{ x: 0, y: 0.5 }}
                         end={{ x: 1, y: 0.5 }}
                         style={styles.submitGradient}
                       >
                         {busy && pendingAction === "forgot" ? (
-                          <View style={styles.loadingRow}>
+                          <Animated.View entering={FadeIn.duration(200)} style={styles.loadingRow}>
                             <ActivityIndicator color="#FFF" size="small" />
                             <Text style={styles.submitText}>{submitLabel}</Text>
-                          </View>
+                          </Animated.View>
                         ) : (
                           <Text style={styles.submitText}>שלח קישור איפוס</Text>
                         )}
@@ -687,13 +716,15 @@ export default function AuthScreen() {
                     </Pressable>
                   </Animated.View>
                   <Pressable
-                    style={styles.textLinkBtn}
+                    style={[styles.textLinkBtn, WEB_TRANSITION]}
+                    onHoverIn={() => setBackLinkHovered(true)}
+                    onHoverOut={() => setBackLinkHovered(false)}
                     onPress={() => {
                       setView("main");
                       clearErrors();
                     }}
                   >
-                    <Text style={[styles.textLink, { color: colors.textSecondary }]}>חזרה לכניסה</Text>
+                    <Text style={[styles.textLink, { color: backLinkHovered ? "#93C5FD" : colors.textSecondary }, WEB_TRANSITION]}>חזרה לכניסה</Text>
                   </Pressable>
                 </>
               ) : (
@@ -713,13 +744,16 @@ export default function AuthScreen() {
                   >
                     <Pressable
                       style={styles.tabHit}
+                      onHoverIn={() => setTabHovered("login")}
+                      onHoverOut={() => setTabHovered(null)}
                       onPress={() => onTabChange("login")}
                     >
                       <Text
                         style={[
                           styles.tabLabel,
+                          WEB_TRANSITION,
                           { color: colors.textMuted },
-                          tab === "login" && [styles.tabLabelActive, { color: colors.text }],
+                          (tab === "login" || tabHovered === "login") && [styles.tabLabelActive, { color: colors.text }],
                         ]}
                       >
                         כניסה
@@ -727,13 +761,16 @@ export default function AuthScreen() {
                     </Pressable>
                     <Pressable
                       style={styles.tabHit}
+                      onHoverIn={() => setTabHovered("register")}
+                      onHoverOut={() => setTabHovered(null)}
                       onPress={() => onTabChange("register")}
                     >
                       <Text
                         style={[
                           styles.tabLabel,
+                          WEB_TRANSITION,
                           { color: colors.textMuted },
-                          tab === "register" && [styles.tabLabelActive, { color: colors.text }],
+                          (tab === "register" || tabHovered === "register") && [styles.tabLabelActive, { color: colors.text }],
                         ]}
                       >
                         הרשמה
@@ -784,13 +821,15 @@ export default function AuthScreen() {
 
                   {tab === "login" ? (
                     <Pressable
-                      style={styles.forgotLinkWrap}
+                      style={[styles.forgotLinkWrap, WEB_TRANSITION]}
+                      onHoverIn={() => setForgotLinkHovered(true)}
+                      onHoverOut={() => setForgotLinkHovered(false)}
                       onPress={() => {
                         setView("forgot");
                         clearErrors();
                       }}
                     >
-                      <Text style={[styles.forgotLink, { color: colors.textSecondary }]}>שכחתי סיסמה</Text>
+                      <Text style={[styles.forgotLink, { color: forgotLinkHovered ? "#93C5FD" : colors.textSecondary }, WEB_TRANSITION]}>שכחתי סיסמה</Text>
                     </Pressable>
                   ) : null}
 
@@ -829,23 +868,27 @@ export default function AuthScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.submitPressable,
+                        WEB_TRANSITION,
+                        submitHovered && !pressed && styles.submitHovered,
                         pressed && styles.submitPressed,
                         busy && styles.submitDisabled,
                       ]}
+                      onHoverIn={() => setSubmitHovered(true)}
+                      onHoverOut={() => setSubmitHovered(false)}
                       onPress={() => void onSubmit()}
                       disabled={busy}
                     >
                       <LinearGradient
-                        colors={["#4F6EF7", "#4F46E5", "#7C3AED"]}
+                        colors={submitHovered ? ["#5B7CF8", "#5B56E8", "#8B4CF0"] : ["#4F6EF7", "#4F46E5", "#7C3AED"]}
                         start={{ x: 0, y: 0.5 }}
                         end={{ x: 1, y: 0.5 }}
                         style={styles.submitGradient}
                       >
                         {busy && submitLabel ? (
-                          <View style={styles.loadingRow}>
+                          <Animated.View entering={FadeIn.duration(200)} style={styles.loadingRow}>
                             <ActivityIndicator color="#FFF" size="small" />
                             <Text style={styles.submitText}>{submitLabel}</Text>
-                          </View>
+                          </Animated.View>
                         ) : (
                           <Text style={styles.submitText}>
                             {tab === "login" ? "כניסה" : "הרשמה"}
@@ -996,6 +1039,10 @@ const styles = StyleSheet.create({
     minWidth: 40,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 8,
+  },
+  eyeHitHovered: {
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   eyeEmoji: {
     fontSize: 18,
@@ -1006,6 +1053,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 10,
     paddingHorizontal: 2,
+    ...Platform.select({
+      web: { outlineStyle: "none" } as Record<string, string>,
+      default: {},
+    }),
   },
   underlineWrap: {
     borderBottomWidth: 1,
@@ -1018,12 +1069,16 @@ const styles = StyleSheet.create({
   generalErrorWrap: {
     marginTop: 6,
   },
+  fieldErrorReserved: {
+    minHeight: 27,
+  },
   fieldErrorRow: {
     flexDirection: "row-reverse",
     alignItems: "flex-start",
     gap: 6,
     marginTop: 8,
     paddingRight: 2,
+    minHeight: 27,
   },
   fieldErrorIcon: {
     fontSize: 14,
@@ -1089,9 +1144,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
   },
+  submitHovered: {
+    transform: [{ scale: 1.02 }],
+    ...Platform.select({
+      web: { boxShadow: "0 4px 20px rgba(79, 70, 229, 0.4)" } as Record<string, string>,
+      default: {},
+    }),
+  },
   submitPressed: {
     opacity: 0.92,
-    transform: [{ scale: 0.99 }],
+    transform: [{ scale: 0.98 }],
   },
   submitDisabled: {
     opacity: 0.85,
