@@ -887,7 +887,8 @@ export default function SettingsScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={colors.statusBar as any} />
       {/* Header + tabs — same on mobile and desktop */}
-      <View style={[styles.header, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.bg }, isDesktop && { alignItems: "center" }]}>
+        <View style={[isDesktop && { maxWidth: 680, width: "100%" }]}>
         <Text style={[styles.screenTitle, { color: colors.text }, isDesktop && { fontSize: 22 }]} accessibilityRole="header">
           הגדרות
         </Text>
@@ -908,6 +909,7 @@ export default function SettingsScreen() {
             );
           })}
         </View>
+        </View>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -915,7 +917,7 @@ export default function SettingsScreen() {
         contentContainerStyle={[
           styles.scroll,
           { paddingBottom: tabBarHeight + 120 },
-          isDesktop && { paddingHorizontal: "5%" },
+          isDesktop && styles.scrollDesktop,
         ]}
         keyboardShouldPersistTaps="handled"
         accessibilityLanguage="he"
@@ -1685,61 +1687,62 @@ export default function SettingsScreen() {
       </ScrollView>
       </View>
 
-      <View style={[styles.stickySave, { paddingBottom: Math.max(16, tabBarHeight * 0.1), backgroundColor: mode === "dark" ? "rgba(11, 15, 23, 0.92)" : "rgba(238, 238, 242, 0.95)", borderTopColor: colors.separator }, isDesktop && { paddingHorizontal: "5%" }]}>
-        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={() => void handleLogout()}
-            activeOpacity={0.9}
-            accessibilityRole="button"
-            accessibilityLabel="התנתק"
-          >
-            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-            <Text style={styles.logoutBtnText}>התנתק</Text>
-          </TouchableOpacity>
+      <View style={[styles.stickySave, { paddingBottom: Math.max(16, tabBarHeight * 0.1), backgroundColor: mode === "dark" ? "rgba(11, 15, 23, 0.92)" : "rgba(238, 238, 242, 0.95)", borderTopColor: colors.separator }]}>
+        <View style={[styles.stickyInner, isDesktop && styles.stickyInnerDesktop]}>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.themeToggleBtn, { borderColor: mode === "dark" ? "rgba(255,255,255,0.20)" : "rgba(0,0,0,0.15)", backgroundColor: mode === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
+              onPress={toggleTheme}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel={mode === "dark" ? "מעבר למצב בהיר" : "מעבר למצב כהה"}
+            >
+              <Ionicons name={mode === "dark" ? "sunny-outline" : "moon-outline"} size={18} color={colors.text} />
+              <Text style={[styles.themeToggleBtnText, { color: colors.text }]}>{mode === "dark" ? "מצב בהיר" : "מצב כהה"}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={() => void handleLogout()}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="התנתק"
+            >
+              <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+              <Text style={styles.logoutBtnText}>התנתק</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteAccountBtn}
+              onPress={() => void handleDeleteAccount()}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="מחק חשבון"
+            >
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              <Text style={styles.deleteAccountBtnText}>מחק חשבון</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
-            style={[styles.themeToggleBtn, { borderColor: mode === "dark" ? "rgba(255,255,255,0.20)" : "rgba(0,0,0,0.15)", backgroundColor: mode === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
-            onPress={toggleTheme}
+            style={[
+              styles.saveBtn,
+              (!isDirty || saving) && styles.saveBtnMuted,
+              saving && styles.saveBtnDisabled,
+            ]}
+            onPress={() => void onSave()}
+            disabled={saving || !isDirty}
             activeOpacity={0.9}
-            accessibilityRole="button"
-            accessibilityLabel={mode === "dark" ? "מעבר למצב בהיר" : "מעבר למצב כהה"}
           >
-            <Ionicons name={mode === "dark" ? "sunny-outline" : "moon-outline"} size={18} color={colors.text} />
-            <Text style={[styles.themeToggleBtnText, { color: colors.text }]}>{mode === "dark" ? "מצב בהיר" : "מצב כהה"}</Text>
+            <Text style={styles.saveBtnText}>
+              {saving
+                ? "שומר…"
+                : isDirty
+                  ? "יש שינויים — שמור"
+                  : "הכל מעודכן ✓"}
+            </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Delete account */}
-        <TouchableOpacity
-          style={styles.deleteAccountBtn}
-          onPress={() => void handleDeleteAccount()}
-          activeOpacity={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="מחק חשבון"
-        >
-          <Ionicons name="trash-outline" size={18} color="#EF4444" />
-          <Text style={styles.deleteAccountBtnText}>מחק חשבון</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.saveBtn,
-            (!isDirty || saving) && styles.saveBtnMuted,
-            saving && styles.saveBtnDisabled,
-          ]}
-          onPress={() => void onSave()}
-          disabled={saving || !isDirty}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.saveBtnText}>
-            {saving
-              ? "שומר…"
-              : isDirty
-                ? "יש שינויים — שמור"
-                : "הכל מעודכן ✓"}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {toast ? (
@@ -1936,6 +1939,12 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 18,
     paddingTop: 8,
+  },
+  scrollDesktop: {
+    maxWidth: 680,
+    width: "100%",
+    alignSelf: "center" as const,
+    paddingHorizontal: 24,
   },
   screenTitle: {
     color: "#F3F6FF",
@@ -2283,6 +2292,18 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11, 15, 23, 0.92)",
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+  },
+  stickyInner: {
+    width: "100%",
+  },
+  stickyInnerDesktop: {
+    maxWidth: 680,
+  },
+  actionRow: {
+    flexDirection: "row-reverse",
+    gap: 10,
+    marginBottom: 8,
   },
   saveBtn: {
     height: 52,
@@ -2302,54 +2323,52 @@ const styles = StyleSheet.create({
     writingDirection: "rtl",
   },
   themeToggleBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 16,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.20)",
     backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row-reverse",
-    gap: 10,
-    marginBottom: 10,
+    gap: 8,
   },
   themeToggleBtnText: {
     color: "#F3F6FF",
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     writingDirection: "rtl",
   },
   logoutBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 16,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(239,68,68,0.35)",
     backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row-reverse",
-    gap: 10,
-    marginBottom: 10,
+    gap: 8,
   },
   logoutBtnText: {
     color: "#EF4444",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: 13,
+    fontWeight: "800",
     writingDirection: "rtl",
   },
   deleteAccountBtn: {
-    marginTop: 12,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 14,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(239,68,68,0.25)",
     backgroundColor: "rgba(239,68,68,0.06)",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginStart: "auto",
   },
   deleteAccountBtnText: {
     color: "#EF4444",
