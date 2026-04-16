@@ -12,7 +12,8 @@ function isPublicRoute(segment: string | undefined) {
   return (
     segment === "auth" ||
     segment === "reset-password" ||
-    segment === "oauth-success"
+    segment === "oauth-success" ||
+    segment === "privacy"
   );
 }
 
@@ -74,6 +75,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="campaign" />
+        <Stack.Screen name="privacy" />
       </Stack>
     </BusinessProvider>
     </ThemeProvider>
