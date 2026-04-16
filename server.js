@@ -439,6 +439,18 @@ const META_CONFIG_ID = process.env.META_CONFIG_ID || "";
 const META_REDIRECT_URI =
   process.env.META_REDIRECT_URI || "https://localhost:3002/auth/meta/callback";
 const APP_WEB_ORIGIN = process.env.APP_WEB_ORIGIN || "http://localhost:8081";
+
+// OAuth config validation on startup
+console.log("=== META OAUTH CONFIG ===");
+console.log("  META_APP_ID:", META_APP_ID);
+console.log("  META_CONFIG_ID:", META_CONFIG_ID || "(not set — using scope-based flow)");
+console.log("  META_REDIRECT_URI:", META_REDIRECT_URI);
+console.log("  APP_WEB_ORIGIN:", APP_WEB_ORIGIN);
+console.log("  META_APP_SECRET:", META_APP_SECRET ? `${META_APP_SECRET.slice(0, 4)}…${META_APP_SECRET.slice(-4)}` : "(missing!)");
+if (META_REDIRECT_URI.includes("localhost")) {
+  console.warn("⚠️  META_REDIRECT_URI contains 'localhost' — this won't work in production!");
+  console.warn("   Set META_REDIRECT_URI=https://your-domain.com/auth/meta/callback in your env.");
+}
 /** Standard Facebook Login (dialog/oauth) */
 const META_OAUTH_SCOPES =
   process.env.META_OAUTH_SCOPES ||
@@ -5672,6 +5684,40 @@ app.get("/api/meta-targeting/interests", async (req, res) => {
   }
 });
 
+app.get("/api/meta-oauth-debug", requireBearerAuthorization, async (req, res) => {
+  const businessId = req.query.business_id || "test-uuid-0000-0000-000000000000";
+  const params = new URLSearchParams();
+  params.set("client_id", META_APP_ID);
+  params.set("redirect_uri", META_REDIRECT_URI);
+  params.set("state", String(businessId));
+  params.set("response_type", "code");
+  if (META_CONFIG_ID) params.set("config_id", META_CONFIG_ID);
+  else params.set("scope", META_OAUTH_SCOPES);
+  const url = `https://www.facebook.com/${GRAPH_API_VERSION}/dialog/oauth?${params.toString()}`;
+
+  return res.json({
+    meta_app_id: META_APP_ID,
+    meta_config_id: META_CONFIG_ID || null,
+    meta_redirect_uri: META_REDIRECT_URI,
+    app_web_origin: APP_WEB_ORIGIN,
+    meta_app_secret_set: !!META_APP_SECRET,
+    graph_api_version: GRAPH_API_VERSION,
+    flow: META_CONFIG_ID ? "config_id (business login)" : "scope (standard login)",
+    oauth_url_preview: url,
+    checklist: {
+      redirect_uri_is_https: META_REDIRECT_URI.startsWith("https://"),
+      redirect_uri_not_localhost: !META_REDIRECT_URI.includes("localhost"),
+      config_id_set: !!META_CONFIG_ID,
+      instructions: [
+        "1. META_REDIRECT_URI must EXACTLY match what's in Meta Developers → Facebook Login → Settings → Valid OAuth Redirect URIs",
+        "2. If using config_id: the redirect URI must also be in Login Configuration settings",
+        "3. App must be Live (not in Development) OR your Facebook user must be added as a tester",
+        "4. oauth_url_preview above is the exact URL sent to Facebook — open it to see what error Facebook shows",
+      ],
+    },
+  });
+});
+
 app.get("/auth/meta", requireBearerAuthorization, async (req, res) => {
   const businessId = req.query.business_id;
   if (!businessId || !isUuid(businessId)) {
@@ -5702,6 +5748,7 @@ app.get("/auth/meta/callback", async (req, res) => {
   console.log("=== META CALLBACK ARRIVED ===");
   console.log("  full URL:", req.originalUrl);
   console.log("  query:", JSON.stringify(req.query));
+  console.log("  redirect_uri used for token exchange:", META_REDIRECT_URI);
 
   const { code, state, error, error_description: errDesc } = req.query;
 
