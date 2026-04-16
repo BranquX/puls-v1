@@ -33,9 +33,6 @@ import { firstPasswordValidationError } from "../lib/password-validation";
 import { setAuthRememberPreference, supabase } from "../lib/supabase";
 import { useTheme } from "../contexts/theme-context";
 
-const WEB_TRANSITION: Record<string, string> | undefined =
-  Platform.OS === "web" ? { transition: "all 0.2s ease" } : undefined;
-
 type AuthTab = "login" | "register";
 type AuthView = "main" | "forgot" | "forgot_sent";
 type FieldKey = "email" | "password" | "general";
@@ -50,37 +47,22 @@ const RESET_REDIRECT_TO =
   process.env.EXPO_PUBLIC_RESET_REDIRECT_URL ??
   `${SITE_URL}/reset-password`;
 
+const WEB_T = Platform.OS === "web"
+  ? ({ transition: "all 0.2s ease" } as Record<string, string>)
+  : undefined;
+
+// ─── Error mappers ───
+
 function mapLoginError(error: AuthError): { field: FieldKey; message: string } {
   const raw = (error.message || "").trim();
   const code = (error as { code?: string }).code || "";
   const lower = raw.toLowerCase();
-
-  if (
-    code === "email_not_confirmed" ||
-    lower.includes("email not confirmed")
-  ) {
-    return {
-      field: "email",
-      message: "נא לאשר את כתובת האימייל מהמייל שנשלח אליך",
-    };
-  }
-
-  if (
-    code === "user_not_found" ||
-    lower.includes("user not found") ||
-    lower.includes("no user found")
-  ) {
+  if (code === "email_not_confirmed" || lower.includes("email not confirmed"))
+    return { field: "email", message: "נא לאשר את כתובת האימייל מהמייל שנשלח אליך" };
+  if (code === "user_not_found" || lower.includes("user not found") || lower.includes("no user found"))
     return { field: "email", message: "לא נמצא חשבון עם אימייל זה" };
-  }
-
-  if (
-    code === "invalid_credentials" ||
-    lower.includes("invalid login") ||
-    lower.includes("invalid credentials")
-  ) {
+  if (code === "invalid_credentials" || lower.includes("invalid login") || lower.includes("invalid credentials"))
     return { field: "password", message: "סיסמה שגויה, נסה שוב" };
-  }
-
   return { field: "general", message: raw || "אירעה שגיאה, נסה שוב" };
 }
 
@@ -88,32 +70,20 @@ function mapSignUpError(error: AuthError): { field: FieldKey; message: string } 
   const raw = (error.message || "").trim();
   const code = (error as { code?: string }).code || "";
   const lower = raw.toLowerCase();
-
-  if (
-    code === "user_already_exists" ||
-    lower.includes("already registered") ||
-    lower.includes("already been registered") ||
-    lower.includes("user already exists")
-  ) {
+  if (code === "user_already_exists" || lower.includes("already registered") || lower.includes("already been registered") || lower.includes("user already exists"))
     return { field: "email", message: "כתובת אימייל זו כבר רשומה" };
-  }
-
-  if (lower.includes("password")) {
+  if (lower.includes("password"))
     return { field: "password", message: raw };
-  }
-
   return { field: "general", message: raw || "אירעה שגיאה, נסה שוב" };
 }
 
-function useShake(): {
-  style: AnimatedStyle<ViewStyle>;
-  trigger: () => void;
-} {
+// ─── Shake hook ───
+
+function useShake(): { style: AnimatedStyle<ViewStyle>; trigger: () => void } {
   const x = useSharedValue(0);
   const style = useAnimatedStyle<ViewStyle>(() => ({
     transform: [{ translateX: x.value }],
   }));
-
   const trigger = useCallback(() => {
     x.value = withSequence(
       withTiming(-10, { duration: 45, easing: Easing.linear }),
@@ -124,38 +94,23 @@ function useShake(): {
       withTiming(0, { duration: 40, easing: Easing.out(Easing.quad) }),
     );
   }, [x]);
-
   return { style, trigger };
 }
 
+// ─── Sub-components ───
+
 function FieldError({ text }: { text: string }) {
-  if (!text) return <View style={styles.fieldErrorReserved} />;
+  if (!text) return null;
   return (
-    <Animated.View
-      entering={FadeInUp.duration(250).easing(Easing.out(Easing.cubic))}
-      style={styles.fieldErrorRow}
-    >
-      <Text style={styles.fieldErrorIcon}>⚠️</Text>
-      <Text style={styles.fieldErrorText}>{text}</Text>
+    <Animated.View entering={FadeInUp.duration(220).easing(Easing.out(Easing.cubic))} style={s.errorRow}>
+      <Text style={s.errorText}>{text}</Text>
     </Animated.View>
   );
 }
 
 type ThemeColors = ReturnType<typeof useTheme>["colors"];
 
-type EmailIconFieldProps = {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder: string;
-  error?: string;
-  shakeStyle: AnimatedStyle<ViewStyle>;
-  accessibilityLabel: string;
-  colors: ThemeColors;
-};
-
-function EmailIconField({
-  label,
+function InputField({
   value,
   onChangeText,
   placeholder,
@@ -163,165 +118,77 @@ function EmailIconField({
   shakeStyle,
   accessibilityLabel,
   colors,
-}: EmailIconFieldProps) {
-  const focus = useSharedValue(0);
-  const [focused, setFocused] = useState(false);
-  const lineStyle = useAnimatedStyle<ViewStyle>(() => {
-    const active = focus.value;
-    return {
-      borderBottomColor: active
-        ? "#4F6EF7"
-        : colors.inputBorder,
-      borderBottomWidth: active ? 2 : 1,
-    };
-  });
-
-  const glowStyle = focused && Platform.OS === "web"
-    ? { boxShadow: "0 2px 12px rgba(79, 110, 247, 0.25)" } as Record<string, string>
-    : undefined;
-
-  const row = (
-    <View style={styles.iconInputRow}>
-      <Text style={styles.leadingIcon}>📧</Text>
-      <TextInput
-        style={[styles.iconInputFlex, { color: colors.text }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-        textAlign="right"
-        accessibilityLabel={accessibilityLabel}
-        onFocus={() => {
-          setFocused(true);
-          focus.value = withTiming(1, { duration: 160 });
-        }}
-        onBlur={() => {
-          setFocused(false);
-          focus.value = withTiming(0, { duration: 200 });
-        }}
-      />
-    </View>
-  );
-
-  return (
-    <View style={styles.fieldBlock}>
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Animated.View style={shakeStyle}>
-        {error ? (
-          <View style={[styles.underlineWrap, styles.underlineError, WEB_TRANSITION]}>
-            {row}
-          </View>
-        ) : (
-          <Animated.View style={[styles.underlineWrap, lineStyle, WEB_TRANSITION, glowStyle]}>
-            {row}
-          </Animated.View>
-        )}
-      </Animated.View>
-      <FieldError text={error ?? ""} />
-    </View>
-  );
-}
-
-type PasswordIconFieldProps = {
-  label: string;
+  keyboardType,
+  secureTextEntry,
+  autoCapitalize,
+  showToggle,
+  onToggle,
+  toggleLabel,
+}: {
   value: string;
   onChangeText: (t: string) => void;
   placeholder: string;
   error?: string;
   shakeStyle: AnimatedStyle<ViewStyle>;
   accessibilityLabel: string;
-  showPassword: boolean;
-  onToggleShow: () => void;
   colors: ThemeColors;
-};
-
-function PasswordIconField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  error,
-  shakeStyle,
-  accessibilityLabel,
-  showPassword,
-  onToggleShow,
-  colors,
-}: PasswordIconFieldProps) {
-  const focus = useSharedValue(0);
+  keyboardType?: "email-address" | "default";
+  secureTextEntry?: boolean;
+  autoCapitalize?: "none" | "sentences";
+  showToggle?: boolean;
+  onToggle?: () => void;
+  toggleLabel?: string;
+}) {
   const [focused, setFocused] = useState(false);
   const [eyeHovered, setEyeHovered] = useState(false);
-  const lineStyle = useAnimatedStyle<ViewStyle>(() => {
-    const active = focus.value;
-    return {
-      borderBottomColor: active
-        ? "#4F6EF7"
-        : colors.inputBorder,
-      borderBottomWidth: active ? 2 : 1,
-    };
-  });
-
-  const glowStyle = focused && Platform.OS === "web"
-    ? { boxShadow: "0 2px 12px rgba(79, 110, 247, 0.25)" } as Record<string, string>
-    : undefined;
-
-  const row = (
-    <View style={styles.passwordIconRow}>
-      <Pressable
-        onPress={onToggleShow}
-        onHoverIn={() => setEyeHovered(true)}
-        onHoverOut={() => setEyeHovered(false)}
-        hitSlop={12}
-        style={[styles.eyeHit, eyeHovered && styles.eyeHitHovered]}
-        accessibilityRole="button"
-        accessibilityLabel={showPassword ? "הסתר סיסמה" : "הצג סיסמה"}
-      >
-        <Text style={styles.eyeEmoji}>{showPassword ? "🙈" : "👁️"}</Text>
-      </Pressable>
-      <TextInput
-        style={[styles.iconInputFlex, { color: colors.text }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        secureTextEntry={!showPassword}
-        textAlign="right"
-        autoCapitalize="none"
-        autoCorrect={false}
-        accessibilityLabel={accessibilityLabel}
-        onFocus={() => {
-          setFocused(true);
-          focus.value = withTiming(1, { duration: 160 });
-        }}
-        onBlur={() => {
-          setFocused(false);
-          focus.value = withTiming(0, { duration: 200 });
-        }}
-      />
-      <Text style={styles.leadingIcon}>🔒</Text>
-    </View>
-  );
 
   return (
-    <View style={styles.fieldBlock}>
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+    <View style={s.fieldWrap}>
       <Animated.View style={shakeStyle}>
-        {error ? (
-          <View style={[styles.underlineWrap, styles.underlineError, WEB_TRANSITION]}>
-            {row}
-          </View>
-        ) : (
-          <Animated.View style={[styles.underlineWrap, lineStyle, WEB_TRANSITION, glowStyle]}>
-            {row}
-          </Animated.View>
-        )}
+        <View
+          style={[
+            s.inputBox,
+            WEB_T,
+            { backgroundColor: colors.inputBg, borderColor: error ? "#F87171" : focused ? "#4F6EF7" : colors.inputBorder },
+            focused && Platform.OS === "web" && ({ boxShadow: "0 0 0 3px rgba(79,110,247,0.15)" } as Record<string, string>),
+          ]}
+        >
+          <TextInput
+            style={[s.inputText, { color: colors.text }]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+            keyboardType={keyboardType || "default"}
+            autoCapitalize={autoCapitalize || "none"}
+            autoCorrect={false}
+            textAlign="right"
+            secureTextEntry={secureTextEntry}
+            accessibilityLabel={accessibilityLabel}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          />
+          {showToggle && onToggle ? (
+            <Pressable
+              onPress={onToggle}
+              onHoverIn={() => setEyeHovered(true)}
+              onHoverOut={() => setEyeHovered(false)}
+              hitSlop={8}
+              style={[s.eyeBtn, eyeHovered && { backgroundColor: "rgba(255,255,255,0.08)" }]}
+              accessibilityRole="button"
+              accessibilityLabel={toggleLabel}
+            >
+              <Text style={s.eyeIcon}>{secureTextEntry ? "👁️" : "🙈"}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </Animated.View>
       <FieldError text={error ?? ""} />
     </View>
   );
 }
+
+// ─── Main screen ───
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -339,22 +206,13 @@ export default function AuthScreen() {
   const [success, setSuccess] = useState(false);
   const [signupNeedsEmailVerify, setSignupNeedsEmailVerify] = useState(false);
 
-  const [tabsLayoutW, setTabsLayoutW] = useState(0);
-  const barLeft = useSharedValue(0);
-  const barWidth = useSharedValue(0);
-
   const emailShake = useShake();
   const passwordShake = useShake();
   const generalShake = useShake();
-
   const [submitHovered, setSubmitHovered] = useState(false);
-  const [forgotLinkHovered, setForgotLinkHovered] = useState(false);
-  const [backLinkHovered, setBackLinkHovered] = useState(false);
-  const [tabHovered, setTabHovered] = useState<AuthTab | null>(null);
+  const [forgotHovered, setForgotHovered] = useState(false);
 
-  const clearErrors = useCallback(() => {
-    setErrors({});
-  }, []);
+  const clearErrors = useCallback(() => setErrors({}), []);
 
   useEffect(() => {
     clearErrors();
@@ -362,40 +220,16 @@ export default function AuthScreen() {
     setSignupNeedsEmailVerify(false);
   }, [tab, clearErrors]);
 
-  useEffect(() => {
-    if (tabsLayoutW <= 0) return;
-    const bw = Math.max(tabsLayoutW / 2 - 20, 40);
-    const loginLeft = tabsLayoutW - bw - 10;
-    const regLeft = 10;
-    barWidth.value = bw;
-    barLeft.value = withTiming(tab === "login" ? loginLeft : regLeft, {
-      duration: 320,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [tab, tabsLayoutW, barLeft, barWidth]);
-
-  const underlineStyle = useAnimatedStyle(() => ({
-    width: barWidth.value,
-    transform: [{ translateX: barLeft.value }],
-  }));
-
   const validateClient = (): boolean => {
     const em = email.trim();
     const next: Partial<Record<FieldKey, string>> = {};
-
-    if (!em) {
-      next.email = "נא להזין אימייל";
-    } else if (!EMAIL_RE.test(em)) {
-      next.email = "כתובת אימייל לא תקינה";
-    }
-
-    if (!password) {
-      next.password = "נא להזין סיסמה";
-    } else if (tab === "register") {
+    if (!em) next.email = "נא להזין אימייל";
+    else if (!EMAIL_RE.test(em)) next.email = "כתובת אימייל לא תקינה";
+    if (!password) next.password = "נא להזין סיסמה";
+    else if (tab === "register") {
       const pwErr = firstPasswordValidationError(password);
       if (pwErr) next.password = pwErr;
     }
-
     if (Object.keys(next).length) {
       setErrors(next);
       if (next.email) emailShake.trigger();
@@ -407,16 +241,8 @@ export default function AuthScreen() {
 
   const validateForgotEmail = (): boolean => {
     const em = email.trim();
-    if (!em) {
-      setErrors({ email: "נא להזין אימייל" });
-      emailShake.trigger();
-      return false;
-    }
-    if (!EMAIL_RE.test(em)) {
-      setErrors({ email: "כתובת אימייל לא תקינה" });
-      emailShake.trigger();
-      return false;
-    }
+    if (!em) { setErrors({ email: "נא להזין אימייל" }); emailShake.trigger(); return false; }
+    if (!EMAIL_RE.test(em)) { setErrors({ email: "כתובת אימייל לא תקינה" }); emailShake.trigger(); return false; }
     return true;
   };
 
@@ -428,477 +254,267 @@ export default function AuthScreen() {
   };
 
   const submitLabel =
-    pendingAction === "login"
-      ? "מתחבר..."
-      : pendingAction === "register"
-        ? "יוצר חשבון..."
-        : pendingAction === "forgot"
-          ? "שולח..."
-          : "";
+    pendingAction === "login" ? "מתחבר..." :
+    pendingAction === "register" ? "יוצר חשבון..." :
+    pendingAction === "forgot" ? "שולח..." : "";
 
   const onForgotSubmit = async () => {
-    Keyboard.dismiss();
-    clearErrors();
+    Keyboard.dismiss(); clearErrors();
     if (!validateForgotEmail()) return;
-
-    setBusy(true);
-    setPendingAction("forgot");
+    setBusy(true); setPendingAction("forgot");
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        email.trim(),
-        { redirectTo: RESET_REDIRECT_TO },
-      );
-      if (error) {
-        applyServerError("general", error.message || "שליחה נכשלה");
-        return;
-      }
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: RESET_REDIRECT_TO });
+      if (error) { applyServerError("general", error.message || "שליחה נכשלה"); return; }
       setView("forgot_sent");
-    } finally {
-      setBusy(false);
-      setPendingAction(null);
-    }
+    } finally { setBusy(false); setPendingAction(null); }
   };
 
   const onSubmit = async () => {
-    Keyboard.dismiss();
-    clearErrors();
+    Keyboard.dismiss(); clearErrors();
     if (!validateClient()) return;
-
     const em = email.trim();
     const pw = password;
-
-    setBusy(true);
-    setPendingAction(tab === "login" ? "login" : "register");
+    setBusy(true); setPendingAction(tab === "login" ? "login" : "register");
     try {
-      if (Platform.OS === "web") {
-        setAuthRememberPreference(rememberMe);
-      }
-
+      if (Platform.OS === "web") setAuthRememberPreference(rememberMe);
       if (tab === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: em,
-          password: pw,
-        });
-        if (error) {
-          const mapped = mapLoginError(error);
-          applyServerError(mapped.field, mapped.message);
-          return;
-        }
-        router.replace("/");
-        return;
+        const { error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+        if (error) { const m = mapLoginError(error); applyServerError(m.field, m.message); return; }
+        router.replace("/"); return;
       }
-
-      const { data, error } = await supabase.auth.signUp({
-        email: em,
-        password: pw,
-        options: { emailRedirectTo: SITE_URL },
-      });
-
-      if (error) {
-        const mapped = mapSignUpError(error);
-        applyServerError(mapped.field, mapped.message);
-        return;
-      }
-
-      if (data.session) {
-        setSuccess(true);
-        setSignupNeedsEmailVerify(false);
-        setTimeout(() => {
-          router.replace("/");
-        }, 1000);
-        return;
-      }
-
-      setSuccess(true);
-      setSignupNeedsEmailVerify(true);
-    } finally {
-      setBusy(false);
-      setPendingAction(null);
-    }
+      const { data, error } = await supabase.auth.signUp({ email: em, password: pw, options: { emailRedirectTo: SITE_URL } });
+      if (error) { const m = mapSignUpError(error); applyServerError(m.field, m.message); return; }
+      if (data.session) { setSuccess(true); setSignupNeedsEmailVerify(false); setTimeout(() => router.replace("/"), 1000); return; }
+      setSuccess(true); setSignupNeedsEmailVerify(true);
+    } finally { setBusy(false); setPendingAction(null); }
   };
 
-  const onTabChange = (t: AuthTab) => {
-    setTab(t);
-    setSuccess(false);
-    setSignupNeedsEmailVerify(false);
-  };
+  const onTabChange = (t: AuthTab) => { setTab(t); setSuccess(false); setSignupNeedsEmailVerify(false); };
 
-  const glassExtra =
-    Platform.OS === "web"
-      ? ({
-          backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)",
-        } as Record<string, string>)
-      : {};
+  const glassExtra = Platform.OS === "web"
+    ? ({ backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)" } as Record<string, string>)
+    : {};
 
-  const tagline =
-    view === "forgot"
-      ? "איפוס סיסמה"
-      : view === "forgot_sent"
-        ? "בדקו את האימייל"
-        : "התחברות לחשבון";
+  // ─── Render ───
+
+  const renderTabs = () => (
+    <View style={[s.segmentWrap, { backgroundColor: colors.inputBg }]}>
+      {(["login", "register"] as AuthTab[]).map((t) => {
+        const active = tab === t;
+        return (
+          <Pressable key={t} style={[s.segmentBtn, active && s.segmentBtnActive]} onPress={() => onTabChange(t)}>
+            <Text style={[s.segmentLabel, { color: colors.textMuted }, active && { color: colors.text, fontWeight: "800" }]}>
+              {t === "login" ? "כניסה" : "הרשמה"}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const renderForm = () => (
+    <>
+      <InputField
+        value={email}
+        onChangeText={(t) => { setEmail(t); if (errors.email) setErrors((e) => ({ ...e, email: undefined })); }}
+        placeholder="אימייל"
+        error={errors.email}
+        shakeStyle={emailShake.style}
+        accessibilityLabel="אימייל"
+        keyboardType="email-address"
+        colors={colors}
+      />
+
+      <InputField
+        value={password}
+        onChangeText={(t) => { setPassword(t); if (errors.password) setErrors((e) => ({ ...e, password: undefined })); }}
+        placeholder={tab === "register" ? "סיסמה — לפחות 6 תווים, אותיות וספרה" : "סיסמה"}
+        error={errors.password}
+        shakeStyle={passwordShake.style}
+        accessibilityLabel="סיסמה"
+        secureTextEntry={!showPassword}
+        showToggle
+        onToggle={() => setShowPassword((v) => !v)}
+        toggleLabel={showPassword ? "הסתר סיסמה" : "הצג סיסמה"}
+        colors={colors}
+      />
+
+      {tab === "register" ? <PasswordRequirements password={password} /> : null}
+
+      {tab === "login" ? (
+        <View style={s.loginExtras}>
+          <Pressable
+            style={s.rememberRow}
+            onPress={() => setRememberMe((r) => !r)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: rememberMe }}
+          >
+            <View style={[s.checkbox, { borderColor: colors.inputBorder, backgroundColor: colors.inputBg }, rememberMe && s.checkboxOn]}>
+              {rememberMe ? <Text style={s.checkMark}>✓</Text> : null}
+            </View>
+            <Text style={[s.rememberLabel, { color: colors.textSecondary }]}>זכור אותי</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setView("forgot"); clearErrors(); }}
+            onHoverIn={() => setForgotHovered(true)}
+            onHoverOut={() => setForgotHovered(false)}
+          >
+            <Text style={[s.forgotLink, WEB_T, { color: forgotHovered ? "#93C5FD" : colors.textMuted }]}>שכחתי סיסמה</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {errors.general ? (
+        <Animated.View entering={FadeIn.duration(200)} style={s.generalError}>
+          <FieldError text={errors.general} />
+        </Animated.View>
+      ) : null}
+
+      <Animated.View style={generalShake.style}>
+        <Pressable
+          style={({ pressed }) => [
+            s.submitBtn, WEB_T,
+            submitHovered && !pressed && s.submitHover,
+            pressed && s.submitPress,
+            busy && s.submitDisabled,
+          ]}
+          onHoverIn={() => setSubmitHovered(true)}
+          onHoverOut={() => setSubmitHovered(false)}
+          onPress={() => void onSubmit()}
+          disabled={busy}
+        >
+          <LinearGradient
+            colors={submitHovered ? ["#5B7CF8", "#5B56E8", "#8B4CF0"] : ["#4F6EF7", "#4F46E5", "#7C3AED"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={s.submitGradient}
+          >
+            {busy && submitLabel ? (
+              <Animated.View entering={FadeIn.duration(200)} style={s.loadRow}>
+                <ActivityIndicator color="#FFF" size="small" />
+                <Text style={s.submitText}>{submitLabel}</Text>
+              </Animated.View>
+            ) : (
+              <Text style={s.submitText}>{tab === "login" ? "כניסה" : "יצירת חשבון"}</Text>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
+    </>
+  );
+
+  const renderForgot = () => (
+    <>
+      <Text style={[s.forgotIntro, { color: colors.textSecondary }]}>
+        הזינו את האימייל שלכם ונשלח קישור לאיפוס הסיסמה.
+      </Text>
+      <InputField
+        value={email}
+        onChangeText={(t) => { setEmail(t); if (errors.email) setErrors((e) => ({ ...e, email: undefined })); }}
+        placeholder="אימייל"
+        error={errors.email}
+        shakeStyle={emailShake.style}
+        accessibilityLabel="אימייל לאיפוס"
+        keyboardType="email-address"
+        colors={colors}
+      />
+      {errors.general ? (
+        <Animated.View entering={FadeIn.duration(200)} style={s.generalError}><FieldError text={errors.general} /></Animated.View>
+      ) : null}
+      <Animated.View style={generalShake.style}>
+        <Pressable
+          style={({ pressed }) => [s.submitBtn, WEB_T, submitHovered && !pressed && s.submitHover, pressed && s.submitPress, busy && s.submitDisabled]}
+          onHoverIn={() => setSubmitHovered(true)}
+          onHoverOut={() => setSubmitHovered(false)}
+          onPress={() => void onForgotSubmit()}
+          disabled={busy}
+        >
+          <LinearGradient colors={["#4F6EF7", "#4F46E5", "#7C3AED"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={s.submitGradient}>
+            {busy && pendingAction === "forgot" ? (
+              <Animated.View entering={FadeIn.duration(200)} style={s.loadRow}><ActivityIndicator color="#FFF" size="small" /><Text style={s.submitText}>{submitLabel}</Text></Animated.View>
+            ) : (
+              <Text style={s.submitText}>שלח קישור איפוס</Text>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
+      <Pressable style={s.backBtn} onPress={() => { setView("main"); clearErrors(); }}>
+        <Text style={[s.backBtnText, { color: colors.textSecondary }]}>← חזרה לכניסה</Text>
+      </Pressable>
+    </>
+  );
+
+  const renderForgotSent = () => (
+    <Animated.View entering={FadeIn.duration(350)} style={s.sentBlock}>
+      <Text style={s.sentEmoji}>✉️</Text>
+      <Text style={[s.sentTitle, { color: colors.text }]}>קישור איפוס נשלח!</Text>
+      <Text style={[s.sentHint, { color: colors.textSecondary }]}>פתחו את המייל ולחצו על הקישור כדי לבחור סיסמה חדשה.</Text>
+      <Pressable style={[s.sentBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]} onPress={() => { setView("main"); clearErrors(); }}>
+        <Text style={[s.sentBtnText, { color: colors.text }]}>חזרה לכניסה</Text>
+      </Pressable>
+    </Animated.View>
+  );
+
+  const renderSuccess = () => (
+    <Animated.View entering={FadeIn.duration(350)} style={s.sentBlock}>
+      <Text style={s.successCheck}>✓</Text>
+      <Text style={[s.sentTitle, { color: colors.text }]}>
+        {signupNeedsEmailVerify ? "נשלח אליך מייל לאימות" : "החשבון נוצר! מתחבר..."}
+      </Text>
+      <Text style={[s.sentHint, { color: colors.textSecondary }]}>
+        {signupNeedsEmailVerify ? "אשר את האימייל ואז חזור לכאן להתחברות" : "רגע אחד, מעבירים אותך לאפליקציה"}
+      </Text>
+      {!signupNeedsEmailVerify ? (
+        <ActivityIndicator color="#86EFAC" style={{ marginTop: 16 }} />
+      ) : (
+        <Pressable style={[s.sentBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]} onPress={() => onTabChange("login")}>
+          <Text style={[s.sentBtnText, { color: colors.text }]}>מעבר לכניסה</Text>
+        </Pressable>
+      )}
+    </Animated.View>
+  );
+
+  const showSuccess = success && tab === "register" && view === "main";
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bg }]} accessibilityLanguage="he">
+    <View style={[s.root, { backgroundColor: colors.bg }]} accessibilityLanguage="he">
       <StatusBar barStyle={colors.statusBar} />
 
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <LinearGradient
-          colors={["#080C14", "#080C14", "#0a1220"]}
-          locations={[0, 0.5, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <LinearGradient
-          colors={["rgba(37, 99, 235, 0.22)", "transparent"]}
-          start={{ x: 0.2, y: 0 }}
-          end={{ x: 0.9, y: 0.75 }}
-          style={styles.meshBlue}
-        />
-        <LinearGradient
-          colors={["transparent", "rgba(71, 85, 105, 0.18)"]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.meshGray}
-        />
+        <LinearGradient colors={["#080C14", "#080C14", "#0a1220"]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={["rgba(37,99,235,0.22)", "transparent"]} start={{ x: 0.2, y: 0 }} end={{ x: 0.9, y: 0.75 }} style={StyleSheet.absoluteFillObject} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.kav}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={s.kav} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingTop: Math.max(insets.top, 20) + 8,
-              paddingBottom: insets.bottom + 28,
-            },
-            Platform.OS === "web" ? ({ direction: "rtl" } as const) : null,
-          ]}
+          contentContainerStyle={[s.scroll, { paddingTop: Math.max(insets.top, 20) + 8, paddingBottom: insets.bottom + 28 }, Platform.OS === "web" ? ({ direction: "rtl" } as const) : null]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View entering={FadeIn.duration(420)} style={styles.logoBlock}>
-            <Text style={[styles.logoText, { color: colors.text }]} accessibilityRole="header">
-              Puls.
+          <Animated.View entering={FadeIn.duration(420)} style={s.logoWrap}>
+            <Text style={[s.logo, { color: colors.text }]} accessibilityRole="header">Puls.</Text>
+            <Text style={[s.tagline, { color: colors.textSecondary }]}>
+              {view === "forgot" ? "איפוס סיסמה" : view === "forgot_sent" ? "בדקו את האימייל" : tab === "login" ? "התחברות לחשבון" : "יצירת חשבון חדש"}
             </Text>
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>{tagline}</Text>
           </Animated.View>
 
           <Animated.View
-            entering={FadeInUp.duration(520)
-              .delay(80)
-              .easing(Easing.out(Easing.cubic))}
-            style={[styles.cardOuter, glassExtra, { borderColor: colors.cardBorder }]}
+            entering={FadeInUp.duration(520).delay(80).easing(Easing.out(Easing.cubic))}
+            style={[s.card, glassExtra, { borderColor: colors.cardBorder }]}
           >
-            {Platform.OS !== "web" ? (
-              <BlurView
-                intensity={55}
-                tint="dark"
-                style={StyleSheet.absoluteFill}
-              />
-            ) : null}
-            <View style={[styles.cardTint, { backgroundColor: colors.cardBg }]} />
+            {Platform.OS !== "web" ? <BlurView intensity={55} tint="dark" style={StyleSheet.absoluteFill} /> : null}
+            <View style={[s.cardTint, { backgroundColor: colors.cardBg }]} />
 
-            <View style={styles.cardInner}>
-              {success && tab === "register" && view === "main" ? (
-                <Animated.View
-                  entering={FadeIn.duration(350)}
-                  style={styles.successBlock}
-                >
-                  <Animated.Text
-                    entering={FadeIn.duration(400).delay(100)}
-                    style={styles.successCheck}
-                  >
-                    ✓
-                  </Animated.Text>
-                  <Text style={[styles.successTitle, { color: colors.text }]}>
-                    {signupNeedsEmailVerify
-                      ? "נשלח אליך מייל לאימות"
-                      : "החשבון נוצר! מתחבר..."}
-                  </Text>
-                  <Text style={[styles.successHint, { color: colors.textSecondary }]}>
-                    {signupNeedsEmailVerify
-                      ? "אשר את האימייל ואז חזור לכאן להתחברות"
-                      : "רגע אחד, מעבירים אותך לאפליקציה"}
-                  </Text>
-                  {!signupNeedsEmailVerify ? (
-                    <ActivityIndicator
-                      color="#86EFAC"
-                      style={{ marginTop: 16 }}
-                    />
-                  ) : (
-                    <Pressable
-                      style={[styles.backToLoginBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
-                      onPress={() => onTabChange("login")}
-                    >
-                      <Text style={[styles.backToLoginText, { color: colors.text }]}>מעבר לכניסה</Text>
-                    </Pressable>
-                  )}
-                </Animated.View>
-              ) : view === "forgot_sent" ? (
-                <Animated.View
-                  entering={FadeIn.duration(350)}
-                  style={styles.forgotSentBlock}
-                >
-                  <Text style={[styles.forgotSentTitle, { color: colors.text }]}>
-                    קישור איפוס נשלח לאימייל שלך ✉️
-                  </Text>
-                  <Text style={[styles.forgotSentHint, { color: colors.textSecondary }]}>
-                    פתחו את המייל ולחצו על הקישור כדי לבחור סיסמה חדשה.
-                  </Text>
-                  <Pressable
-                    style={[styles.backToLoginBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
-                    onPress={() => {
-                      setView("main");
-                      clearErrors();
-                    }}
-                  >
-                    <Text style={[styles.backToLoginText, { color: colors.text }]}>חזרה לכניסה</Text>
-                  </Pressable>
-                </Animated.View>
-              ) : view === "forgot" ? (
-                <>
-                  <Text style={[styles.forgotIntro, { color: colors.textSecondary }]}>
-                    הזינו את האימייל שלכם ונשלח קישור לאיפוס הסיסמה.
-                  </Text>
-                  <EmailIconField
-                    label="אימייל"
-                    value={email}
-                    onChangeText={(t) => {
-                      setEmail(t);
-                      if (errors.email)
-                        setErrors((e) => ({ ...e, email: undefined }));
-                    }}
-                    placeholder="you@example.com"
-                    error={errors.email}
-                    shakeStyle={emailShake.style}
-                    accessibilityLabel="אימייל לאיפוס"
-                    colors={colors}
-                  />
-                  {errors.general ? (
-                    <Animated.View
-                      entering={FadeIn.duration(200)}
-                      style={styles.generalErrorWrap}
-                    >
-                      <FieldError text={errors.general} />
-                    </Animated.View>
-                  ) : null}
-                  <Animated.View style={generalShake.style}>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.submitPressable,
-                        WEB_TRANSITION,
-                        submitHovered && !pressed && styles.submitHovered,
-                        pressed && styles.submitPressed,
-                        busy && styles.submitDisabled,
-                      ]}
-                      onHoverIn={() => setSubmitHovered(true)}
-                      onHoverOut={() => setSubmitHovered(false)}
-                      onPress={() => void onForgotSubmit()}
-                      disabled={busy}
-                    >
-                      <LinearGradient
-                        colors={submitHovered ? ["#5B7CF8", "#5B56E8", "#8B4CF0"] : ["#4F6EF7", "#4F46E5", "#7C3AED"]}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={styles.submitGradient}
-                      >
-                        {busy && pendingAction === "forgot" ? (
-                          <Animated.View entering={FadeIn.duration(200)} style={styles.loadingRow}>
-                            <ActivityIndicator color="#FFF" size="small" />
-                            <Text style={styles.submitText}>{submitLabel}</Text>
-                          </Animated.View>
-                        ) : (
-                          <Text style={styles.submitText}>שלח קישור איפוס</Text>
-                        )}
-                      </LinearGradient>
-                    </Pressable>
-                  </Animated.View>
-                  <Pressable
-                    style={[styles.textLinkBtn, WEB_TRANSITION]}
-                    onHoverIn={() => setBackLinkHovered(true)}
-                    onHoverOut={() => setBackLinkHovered(false)}
-                    onPress={() => {
-                      setView("main");
-                      clearErrors();
-                    }}
-                  >
-                    <Text style={[styles.textLink, { color: backLinkHovered ? "#93C5FD" : colors.textSecondary }, WEB_TRANSITION]}>חזרה לכניסה</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <View
-                    style={styles.tabsRow}
-                    onLayout={(e) => {
-                      setTabsLayoutW(e.nativeEvent.layout.width);
-                      const w = e.nativeEvent.layout.width;
-                      const bw = Math.max(w / 2 - 20, 40);
-                      barWidth.value = bw;
-                      const loginL = w - bw - 10;
-                      const regL = 10;
-                      barLeft.value =
-                        tab === "login" ? loginL : regL;
-                    }}
-                  >
-                    <Pressable
-                      style={styles.tabHit}
-                      onHoverIn={() => setTabHovered("login")}
-                      onHoverOut={() => setTabHovered(null)}
-                      onPress={() => onTabChange("login")}
-                    >
-                      <Text
-                        style={[
-                          styles.tabLabel,
-                          WEB_TRANSITION,
-                          { color: colors.textMuted },
-                          (tab === "login" || tabHovered === "login") && [styles.tabLabelActive, { color: colors.text }],
-                        ]}
-                      >
-                        כניסה
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.tabHit}
-                      onHoverIn={() => setTabHovered("register")}
-                      onHoverOut={() => setTabHovered(null)}
-                      onPress={() => onTabChange("register")}
-                    >
-                      <Text
-                        style={[
-                          styles.tabLabel,
-                          WEB_TRANSITION,
-                          { color: colors.textMuted },
-                          (tab === "register" || tabHovered === "register") && [styles.tabLabelActive, { color: colors.text }],
-                        ]}
-                      >
-                        הרשמה
-                      </Text>
-                    </Pressable>
-                    <View style={[styles.tabUnderlineTrack, { backgroundColor: colors.separator }]}>
-                      <Animated.View
-                        style={[styles.tabUnderlineBar, underlineStyle]}
-                      />
-                    </View>
-                  </View>
-
-                  <EmailIconField
-                    label="אימייל"
-                    value={email}
-                    onChangeText={(t) => {
-                      setEmail(t);
-                      if (errors.email)
-                        setErrors((e) => ({ ...e, email: undefined }));
-                    }}
-                    placeholder="you@example.com"
-                    error={errors.email}
-                    shakeStyle={emailShake.style}
-                    accessibilityLabel="אימייל"
-                    colors={colors}
-                  />
-
-                  <PasswordIconField
-                    label="סיסמה"
-                    value={password}
-                    onChangeText={(t) => {
-                      setPassword(t);
-                      if (errors.password)
-                        setErrors((e) => ({ ...e, password: undefined }));
-                    }}
-                    placeholder="לפחות 6 תווים, אותיות וספרה"
-                    error={errors.password}
-                    shakeStyle={passwordShake.style}
-                    accessibilityLabel="סיסמה"
-                    showPassword={showPassword}
-                    onToggleShow={() => setShowPassword((s) => !s)}
-                    colors={colors}
-                  />
-
-                  {tab === "register" ? (
-                    <PasswordRequirements password={password} />
-                  ) : null}
-
-                  {tab === "login" ? (
-                    <Pressable
-                      style={[styles.forgotLinkWrap, WEB_TRANSITION]}
-                      onHoverIn={() => setForgotLinkHovered(true)}
-                      onHoverOut={() => setForgotLinkHovered(false)}
-                      onPress={() => {
-                        setView("forgot");
-                        clearErrors();
-                      }}
-                    >
-                      <Text style={[styles.forgotLink, { color: forgotLinkHovered ? "#93C5FD" : colors.textSecondary }, WEB_TRANSITION]}>שכחתי סיסמה</Text>
-                    </Pressable>
-                  ) : null}
-
-                  {tab === "login" && Platform.OS === "web" ? (
-                    <Pressable
-                      style={styles.rememberRow}
-                      onPress={() => setRememberMe((r) => !r)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: rememberMe }}
-                    >
-                      <View
-                        style={[
-                          styles.checkbox,
-                          { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
-                          rememberMe && styles.checkboxOn,
-                        ]}
-                      >
-                        {rememberMe ? (
-                          <Text style={[styles.checkboxMark, { color: colors.text }]}>✓</Text>
-                        ) : null}
-                      </View>
-                      <Text style={[styles.rememberLabel, { color: colors.textSecondary }]}>זכור אותי</Text>
-                    </Pressable>
-                  ) : null}
-
-                  {errors.general ? (
-                    <Animated.View
-                      entering={FadeIn.duration(200)}
-                      style={styles.generalErrorWrap}
-                    >
-                      <FieldError text={errors.general} />
-                    </Animated.View>
-                  ) : null}
-
-                  <Animated.View style={generalShake.style}>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.submitPressable,
-                        WEB_TRANSITION,
-                        submitHovered && !pressed && styles.submitHovered,
-                        pressed && styles.submitPressed,
-                        busy && styles.submitDisabled,
-                      ]}
-                      onHoverIn={() => setSubmitHovered(true)}
-                      onHoverOut={() => setSubmitHovered(false)}
-                      onPress={() => void onSubmit()}
-                      disabled={busy}
-                    >
-                      <LinearGradient
-                        colors={submitHovered ? ["#5B7CF8", "#5B56E8", "#8B4CF0"] : ["#4F6EF7", "#4F46E5", "#7C3AED"]}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={styles.submitGradient}
-                      >
-                        {busy && submitLabel ? (
-                          <Animated.View entering={FadeIn.duration(200)} style={styles.loadingRow}>
-                            <ActivityIndicator color="#FFF" size="small" />
-                            <Text style={styles.submitText}>{submitLabel}</Text>
-                          </Animated.View>
-                        ) : (
-                          <Text style={styles.submitText}>
-                            {tab === "login" ? "כניסה" : "הרשמה"}
-                          </Text>
-                        )}
-                      </LinearGradient>
-                    </Pressable>
-                  </Animated.View>
-                </>
-              )}
+            <View style={s.cardBody}>
+              {showSuccess ? renderSuccess()
+                : view === "forgot_sent" ? renderForgotSent()
+                : view === "forgot" ? renderForgot()
+                : (
+                  <>
+                    {renderTabs()}
+                    {renderForm()}
+                  </>
+                )}
             </View>
           </Animated.View>
         </ScrollView>
@@ -907,345 +523,83 @@ export default function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#080C14",
+// ─── Styles ───
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: "#080C14" },
+  kav: { flex: 1 },
+  scroll: { flexGrow: 1, paddingHorizontal: 22, justifyContent: "center" },
+
+  logoWrap: { alignItems: "center", marginBottom: 24 },
+  logo: {
+    fontSize: 42, fontWeight: "900", letterSpacing: -0.5, textAlign: "center",
+    textShadowColor: "rgba(59,130,246,0.85)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 22,
   },
-  meshBlue: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 1,
-  },
-  meshGray: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "52%",
-  },
-  kav: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 22,
-    justifyContent: "center",
-  },
-  logoBlock: {
-    alignItems: "center",
-    marginBottom: 28,
-  },
-  logoText: {
-    color: "#F8FAFC",
-    fontSize: 40,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-    textAlign: "center",
-    textShadowColor: "rgba(59, 130, 246, 0.85)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 22,
-  },
-  tagline: {
-    marginTop: 10,
-    color: "rgba(226, 232, 240, 0.62)",
-    fontSize: 15,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  cardOuter: {
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    maxWidth: 440,
-    width: "100%",
-    alignSelf: "center",
-  },
-  cardTint: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-  },
-  cardInner: {
-    paddingHorizontal: 22,
-    paddingTop: 22,
-    paddingBottom: 26,
-  },
-  tabsRow: {
-    flexDirection: "row-reverse",
-    marginBottom: 8,
-    position: "relative",
-  },
-  tabHit: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  tabLabel: {
-    color: "rgba(226, 232, 240, 0.5)",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  tabLabelActive: {
-    color: "#F1F5F9",
-  },
-  tabUnderlineTrack: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 3,
+  tagline: { marginTop: 8, fontSize: 15, fontWeight: "500", textAlign: "center", color: "rgba(226,232,240,0.62)" },
+
+  card: { borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", maxWidth: 420, width: "100%", alignSelf: "center" },
+  cardTint: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.06)" },
+  cardBody: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24 },
+
+  // Segmented tabs
+  segmentWrap: {
+    flexDirection: "row-reverse", borderRadius: 12, padding: 4, marginBottom: 20,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
-  tabUnderlineBar: {
-    position: "absolute",
-    left: 0,
-    bottom: 0,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#60A5FA",
-    shadowColor: "#4F6EF7",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
+  segmentBtn: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 10 },
+  segmentBtnActive: { backgroundColor: "rgba(79,110,247,0.2)" },
+  segmentLabel: { fontSize: 15, fontWeight: "600" },
+
+  // Input field
+  fieldWrap: { marginBottom: 12 },
+  inputBox: {
+    flexDirection: "row-reverse", alignItems: "center",
+    borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 14, minHeight: 50,
   },
-  fieldBlock: {
-    marginTop: 18,
+  inputText: {
+    flex: 1, fontSize: 15, paddingVertical: 12, textAlign: "right",
+    ...Platform.select({ web: { outlineStyle: "none" } as Record<string, string>, default: {} }),
   },
-  fieldLabel: {
-    color: "rgba(226, 232, 240, 0.75)",
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "right",
-    marginBottom: 8,
-  },
-  iconInputRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    minHeight: 48,
-  },
-  passwordIconRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 48,
-  },
-  leadingIcon: {
-    fontSize: 18,
-  },
-  eyeHit: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    minWidth: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  eyeHitHovered: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  eyeEmoji: {
-    fontSize: 18,
-  },
-  iconInputFlex: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    ...Platform.select({
-      web: { outlineStyle: "none" } as Record<string, string>,
-      default: {},
-    }),
-  },
-  underlineWrap: {
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.2)",
-  },
-  underlineError: {
-    borderBottomColor: "#F87171",
-    borderBottomWidth: 2,
-  },
-  generalErrorWrap: {
-    marginTop: 6,
-  },
-  fieldErrorReserved: {
-    minHeight: 27,
-  },
-  fieldErrorRow: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: 6,
-    marginTop: 8,
-    paddingRight: 2,
-    minHeight: 27,
-  },
-  fieldErrorIcon: {
-    fontSize: 14,
-    marginTop: 1,
-  },
-  fieldErrorText: {
-    flex: 1,
-    color: "#FCA5A5",
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "right",
-    lineHeight: 19,
-  },
-  forgotLinkWrap: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-    paddingVertical: 4,
-  },
-  forgotLink: {
-    color: "rgba(147, 197, 253, 0.95)",
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "right",
-  },
-  rememberRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 16,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
-  checkboxOn: {
-    borderColor: "rgba(96, 165, 250, 0.9)",
-    backgroundColor: "rgba(37, 99, 235, 0.35)",
-  },
-  checkboxMark: {
-    color: "#F8FAFC",
-    fontSize: 13,
-    fontWeight: "900",
-    marginTop: -1,
-  },
-  rememberLabel: {
-    color: "rgba(226, 232, 240, 0.82)",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  loadingRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-  },
-  submitPressable: {
-    marginTop: 28,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  submitHovered: {
+  eyeBtn: { padding: 6, borderRadius: 8, marginStart: 4 },
+  eyeIcon: { fontSize: 18 },
+
+  // Errors
+  errorRow: { marginTop: 6, paddingHorizontal: 4 },
+  errorText: { color: "#FCA5A5", fontSize: 13, fontWeight: "600", textAlign: "right", lineHeight: 18 },
+  generalError: { marginTop: 4 },
+
+  // Login extras (forgot + remember)
+  loginExtras: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 4, marginBottom: 4 },
+  rememberRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  checkboxOn: { borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(37,99,235,0.35)" },
+  checkMark: { color: "#F8FAFC", fontSize: 12, fontWeight: "900" },
+  rememberLabel: { fontSize: 13, fontWeight: "600" },
+  forgotLink: { fontSize: 13, fontWeight: "600" },
+
+  // Submit button
+  submitBtn: { marginTop: 16, borderRadius: 14, overflow: "hidden" },
+  submitHover: {
     transform: [{ scale: 1.02 }],
-    ...Platform.select({
-      web: { boxShadow: "0 4px 20px rgba(79, 70, 229, 0.4)" } as Record<string, string>,
-      default: {},
-    }),
+    ...Platform.select({ web: { boxShadow: "0 4px 20px rgba(79,70,229,0.4)" } as Record<string, string>, default: {} }),
   },
-  submitPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
-  },
-  submitDisabled: {
-    opacity: 0.85,
-  },
-  submitGradient: {
-    minHeight: 54,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-  },
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  successBlock: {
-    alignItems: "center",
-    paddingVertical: 32,
-  },
-  successCheck: {
-    fontSize: 56,
-    color: "#4ADE80",
-    fontWeight: "800",
-    textShadowColor: "rgba(74, 222, 128, 0.5)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 16,
-  },
-  successTitle: {
-    marginTop: 16,
-    color: "#ECFDF5",
-    fontSize: 18,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  successHint: {
-    marginTop: 8,
-    color: "rgba(226, 232, 240, 0.65)",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  backToLoginBtn: {
-    marginTop: 22,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  backToLoginText: {
-    color: "#E2E8F0",
-    fontSize: 15,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  forgotIntro: {
-    color: "rgba(226, 232, 240, 0.75)",
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: "right",
-    marginBottom: 8,
-  },
-  forgotSentBlock: {
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-  forgotSentTitle: {
-    marginTop: 12,
-    color: "#ECFDF5",
-    fontSize: 17,
-    fontWeight: "800",
-    textAlign: "center",
-    lineHeight: 26,
-    paddingHorizontal: 8,
-  },
-  forgotSentHint: {
-    marginTop: 10,
-    color: "rgba(226, 232, 240, 0.65)",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 22,
-    paddingHorizontal: 4,
-  },
-  textLinkBtn: {
-    marginTop: 18,
-    alignSelf: "center",
-    paddingVertical: 8,
-  },
-  textLink: {
-    color: "rgba(147, 197, 253, 0.95)",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+  submitPress: { opacity: 0.92, transform: [{ scale: 0.98 }] },
+  submitDisabled: { opacity: 0.85 },
+  submitGradient: { minHeight: 52, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", borderRadius: 14 },
+  submitText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  loadRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+
+  // Forgot flow
+  forgotIntro: { fontSize: 14, lineHeight: 22, textAlign: "right", marginBottom: 8 },
+  backBtn: { marginTop: 16, alignSelf: "center", paddingVertical: 8 },
+  backBtnText: { fontSize: 14, fontWeight: "600" },
+
+  // Sent / success states
+  sentBlock: { alignItems: "center", paddingVertical: 24 },
+  sentEmoji: { fontSize: 48 },
+  successCheck: { fontSize: 56, color: "#4ADE80", fontWeight: "800", textShadowColor: "rgba(74,222,128,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 16 },
+  sentTitle: { marginTop: 14, fontSize: 18, fontWeight: "800", textAlign: "center" },
+  sentHint: { marginTop: 8, fontSize: 14, textAlign: "center", lineHeight: 22 },
+  sentBtn: { marginTop: 20, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 14, borderWidth: 1 },
+  sentBtnText: { fontSize: 15, fontWeight: "700", textAlign: "center" },
 });
