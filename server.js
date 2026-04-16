@@ -436,7 +436,7 @@ const ANTHROPIC_API_KEY = requireEnv("ANTHROPIC_API_KEY");
 const GEMINI_API_KEY = requireEnv("GEMINI_API_KEY");
 const META_APP_SECRET = requireEnv("META_APP_SECRET");
 
-const META_APP_ID = requireEnv("META_APP_ID");
+const META_APP_ID = process.env.META_APP_ID || "950143061210639";
 const META_CONFIG_ID = process.env.META_CONFIG_ID || "";
 const META_REDIRECT_URI =
   process.env.META_REDIRECT_URI || "https://localhost:3002/auth/meta/callback";
@@ -3415,11 +3415,14 @@ async function requireBearerAuthorization(req, res, next) {
     return res.status(401).json({ error: "חסר JWT ב־Authorization" });
   }
   try {
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) {
-      return res.status(401).json({ error: "טוקן לא תקין או פג תוקף" });
+    const decoded = decodeJwtPayload(token);
+    if (!decoded || !decoded.sub) {
+      return res.status(401).json({ error: "טוקן לא תקין" });
     }
-    req.user = user;
+    if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
+      return res.status(401).json({ error: "טוקן פג תוקף" });
+    }
+    req.user = { id: decoded.sub, email: decoded.email };
   } catch {
     return res.status(401).json({ error: "אימות נכשל" });
   }
